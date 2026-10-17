@@ -17,6 +17,17 @@ revival that rewrote most of the surface. For anything before that, read
 
 ---
 
+## 2026-10-17
+
+### Fixed
+
+- **Scrapes no longer die on the first video once SQLite enforces foreign
+  keys.** The video row is flushed before its `QueryVideo` link is inserted,
+  which removes the insert-order dependency that the scraper previously got
+  away with only because foreign-key checks were off. Failed scrapes now roll
+  back before recording the error status, so the UI stops claiming that a dead
+  task is still fetching.
+
 ## 2026-09-21
 
 ### Changed

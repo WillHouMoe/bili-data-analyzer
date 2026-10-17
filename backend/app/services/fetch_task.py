@@ -21,6 +21,20 @@ BATCH_BREAK_MIN = 8  # Min seconds between batches
 BATCH_BREAK_MAX = 15  # Max seconds between batches
 
 
+async def _record_fetch_error(db: AsyncSession, query: Query, message: str) -> None:
+    """Record a terminal error after rolling back any failed transaction.
+
+    A flush failure leaves the session unusable. Committing the status directly
+    then raises PendingRollbackError, which leaves the query at its last
+    progress string and makes a dead task look like it is still running.
+    """
+    await db.rollback()
+    query.status = "error"
+    query.error_message = message
+    query.progress = None
+    await db.commit()
+
+
 async def _upsert_video_content(
     db: AsyncSession,
     bvid: str,
@@ -136,6 +150,12 @@ async def run_fetch(query_id: int, uid: int, start_date, end_date, sessdata: str
                         existing.tags = detail["tags"]
                         existing.updated_at = datetime.now(UTC)
 
+                    # QueryVideo has no ORM relationship to Video, so SQLAlchemy
+                    # cannot infer the insert order. SQLite enforces the foreign
+                    # key, and query_videos can otherwise be inserted before the
+                    # video it references, rolling back the first video.
+                    await db.flush()
+
                     # Add stats snapshot
                     s = detail["stats"]
                     db.add(VideoStats(
@@ -229,15 +249,11 @@ async def run_fetch(query_id: int, uid: int, start_date, end_date, sessdata: str
                 # payload, so surfacing it leaks nothing while telling the user
                 # the one thing that actually fixes the run.
                 logger.warning("Fetch blocked for query %s: %s", query_id, e)
-                query.status = "error"
-                query.error_message = str(e)
-                query.progress = None
-                await db.commit()
+                await _record_fetch_error(db, query, str(e))
             except Exception:
                 logger.exception("Fetch task failed for query %s", query_id)
-                query.status = "error"
-                query.error_message = "Fetch failed. Check server logs for details."
-                query.progress = None
-                await db.commit()
+                await _record_fetch_error(
+                    db, query, "Fetch failed. Check server logs for details."
+                )
             finally:
                 await client.aclose()
