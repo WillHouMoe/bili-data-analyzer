@@ -15,7 +15,6 @@ import RadarChart from "@/components/video/RadarChart";
 import ComparisonBars from "@/components/video/ComparisonBars";
 import VideoGrowthChart from "@/components/video/VideoGrowthChart";
 import RankingHighlights from "@/components/dashboard/RankingHighlights";
-import AIPanel from "@/components/dashboard/AIPanel";
 
 export default function VideoDetailPage() {
   const { t, i18n } = useTranslation();
@@ -28,7 +27,6 @@ export default function VideoDetailPage() {
   const [comparison, setComparison] = useState<VideoComparison | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
 
   useEffect(() => {
     if (!bvid) return;
@@ -117,11 +115,6 @@ export default function VideoDetailPage() {
             : []),
           { label: t("video.duration"), value: formatDuration(video.duration) },
         ]}
-        actions={
-          <Button variant="default" onClick={() => setAiOpen(true)}>
-            {t("ai.analyze")}
-          </Button>
-        }
       />
 
       <div className="flex flex-col gap-10 px-4 pt-6 pb-16 md:px-8">
@@ -172,12 +165,6 @@ export default function VideoDetailPage() {
         />
       </div>
 
-      <AIPanel
-        bvid={video.bvid}
-        uid={creatorId ?? undefined}
-        open={aiOpen}
-        onOpenChange={setAiOpen}
-      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 # BiliDataAnalyzer
 
-一個用來解讀 Bilibili 創作者影片表現的儀表板：某段時間內發布了什麼、表現如何，以及 LLM 怎麼解讀這些數字。
+一個用來解讀 Bilibili 創作者影片表現的儀表板：某段時間內發布了什麼、表現如何，以及這些數字如何累積。
 
 <p>
   <a href="https://github.com/WillHouMoe/bili-data-analyzer/actions/workflows/ci.yml"><img src="https://github.com/WillHouMoe/bili-data-analyzer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -11,7 +11,7 @@
 
 Bilibili 的創作中心只給你看自己帳號的總數和幾條趨勢線。BiliDataAnalyzer 能跨一位創作者近期的作品回答更廣的問題：哪些影片表現最好、發布節奏與影片時長跟關注度有什麼關係，以及互動如何隨時間累積。它吃任何公開的 UID，所以創作者回顧自己、粉絲或分析者研究別人、或是拿兩位創作者互相比較，都用得上。
 
-給它一個 UID 和一段日期範圍，它就會抓出創作者在那段時間內發布的每一支影片，把表現數據畫成圖表。之後可以透過一個 OpenAI 相容端點，針對這些結果提問，模型會用工具呼叫存取同一份中繼資料與匯總統計來回答。
+給它一個 UID 和一段日期範圍，它就會抓出創作者在那段時間內發布的每一支影片，把表現數據畫成圖表。
 
 留言、彈幕與字幕正文刻意不在範圍內。應用程式會保留 Bilibili 影片統計資料提供的留言與彈幕「數量」，但不會抓取或儲存底層正文。
 
@@ -48,7 +48,6 @@ docker compose exec app python -m scripts.seed_demo
 1. **Add creator** —— 輸入創作者的 UID（就是 `space.bilibili.com/546195` 裡的那個數字），選一段日期範圍。側邊欄會顯示抓取進度。
 2. **Dashboard** —— 摘要卡片、觀看數趨勢、互動數比較、觀看數對互動率散佈圖、時長分析與發布節奏。目錄現在以 UP 主為單位，單次抓取只是其下的批次；帳號總粉絲、總播放與總獲讚由 Bilibili 的 UP 主統計接口取得。影片績效快照只更新最近 30–50 支作品，粉絲、帳號播放與帳號獲讚歷史則另存為 UP 主快照，並以兩張並排圖表呈現：左側是粉絲，右側是帳號播放與獲讚。
 3. **Video detail** —— 單支影片的數據，附雷達圖，以及跟這位 UP 主合併作品庫平均值的差異。
-4. **AI analysis** —— 在 Settings 裡設定 OpenAI 相容的 Base URL、key 與 model，接著就能追問問題，回答會用串流的方式回傳。
 
 在 UP 主頁面按 **Fetch another range** 可以追加作品。已存在的影片會依 BV 號重複使用，重疊區間不需要重新抓取整個作品目錄。
 
@@ -70,7 +69,6 @@ docker compose exec app python -m scripts.seed_demo
 |---|---|
 | Frontend | Vite · React 19 · TypeScript · Tailwind CSS v4 · Base UI · ECharts |
 | Backend | FastAPI · SQLAlchemy 2.0（async）· aiosqlite · httpx |
-| AI | OpenAI SDK，透過 SSE 串流，支援 tool calling |
 | 部署 | Docker Compose，單一 multi-stage image |
 
 ## 設定

@@ -35,6 +35,14 @@ revival that rewrote most of the surface. For anything before that, read
   views, while the day-detail list continues to show every upload and its
   individual playback count.
 
+### Removed
+
+- **AI analysis is no longer exposed in the product.** Creator and video pages
+  no longer show an AI entry, and Settings no longer offers model configuration
+  or connection testing. Existing server endpoints, credentials and
+  conversations remain in place so the feature can be reintroduced without a
+  destructive migration once there is a concrete product plan.
+
 ## 2026-10-25
 
 ### Added

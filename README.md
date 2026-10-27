@@ -1,8 +1,7 @@
 # BiliDataAnalyzer
 
 A dashboard for reading a Bilibili creator's video performance: what they
-posted in a window of time, how it performed, and what an LLM makes of those
-numbers.
+posted in a window of time, how it performed, and how those figures accumulated.
 
 <p>
   <a href="https://github.com/WillHouMoe/bili-data-analyzer/actions/workflows/ci.yml"><img src="https://github.com/WillHouMoe/bili-data-analyzer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -19,9 +18,7 @@ public UID, so it works for a creator reviewing their own run, a fan or analyst
 studying someone else's, or anyone comparing two.
 
 Give it a UID and a date range. It fetches every video the creator posted in
-that window and charts the performance. An OpenAI-compatible endpoint can then
-be asked questions about the result, with tool calls against the same metadata
-and aggregate stats.
+that window and charts the performance.
 
 Comment, danmaku and subtitle text is deliberately out of scope. The app keeps
 the aggregate comment and danmaku counts supplied by Bilibili's video-stat
@@ -83,8 +80,6 @@ performance figures. Pass `--reset` to start over.
    left, and account views plus likes on the right.
 3. **Video detail** — one video's numbers with a radar chart and deltas against
    the creator's merged video library.
-4. **AI analysis** — configure an OpenAI-compatible Base URL, key and model in
-   Settings, then ask follow-up questions; answers stream back.
 
 Use **Fetch another range** on a creator page to append more videos. Existing
 videos are reused by BV ID, so overlapping ranges do not scrape the whole
@@ -129,7 +124,6 @@ against someone getting the `.db` file alone, not against host access.
 |---|---|
 | Frontend | Vite · React 19 · TypeScript · Tailwind CSS v4 · Base UI · ECharts |
 | Backend | FastAPI · SQLAlchemy 2.0 (async) · aiosqlite · httpx |
-| AI | OpenAI SDK, streamed over SSE, with tool calling |
 | Deploy | Docker Compose, single multi-stage image |
 
 ## Configuration

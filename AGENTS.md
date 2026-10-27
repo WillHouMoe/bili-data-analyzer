@@ -1,10 +1,9 @@
 # AGENTS.md — BiliDataAnalyzer
 
 Bilibili creator analytics: give it a UID + date range and it scrapes video
-metadata and aggregate stats, then serves an ECharts performance dashboard and
-an OpenAI-compatible tool-calling chat over that data. Single-machine, no auth
-— that is why it binds 127.0.0.1 and why SESSDATA is a hard requirement
-(anonymous calls get HTTP 412).
+metadata and aggregate stats, then serves an ECharts performance dashboard.
+Single-machine, no auth — that is why it binds 127.0.0.1 and why SESSDATA is a
+hard requirement (anonymous calls get HTTP 412).
 
 ## Layout
 

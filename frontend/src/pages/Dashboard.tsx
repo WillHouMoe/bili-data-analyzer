@@ -20,7 +20,6 @@ import ScatterChart from "@/components/dashboard/ScatterChart";
 import DurationChart from "@/components/dashboard/DurationChart";
 import PublishCalendar from "@/components/dashboard/PublishCalendar";
 import VideoList from "@/components/dashboard/VideoList";
-import AIPanel from "@/components/dashboard/AIPanel";
 import VideoNote, { type VideoNoteRow } from "@/components/dashboard/VideoNote";
 import NewQueryDialog from "@/components/dashboard/NewQueryDialog";
 import RankingHighlights from "@/components/dashboard/RankingHighlights";
@@ -95,7 +94,6 @@ export default function Dashboard() {
   const [loadingDetail, setLoadingDetail] = useState(() => uidStr !== undefined);
   const [landingLoaded, setLandingLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
   const [appendOpen, setAppendOpen] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [note, setNote] = useState<NoteState | null>(null);
@@ -412,9 +410,6 @@ export default function Dashboard() {
               <Button variant="outline" onClick={() => setAppendOpen(true)}>
                 {t("app.appendFetch")}
               </Button>
-              <Button variant="default" onClick={() => setAiOpen(true)}>
-                {t("ai.analyze")}
-              </Button>
             </div>
           ) : undefined
         }
@@ -557,7 +552,6 @@ export default function Dashboard() {
         creatorId={creatorId}
       />
 
-      <AIPanel uid={creatorId} open={aiOpen} onOpenChange={setAiOpen} />
       <NewQueryDialog
         open={appendOpen}
         onOpenChange={setAppendOpen}

@@ -108,9 +108,6 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
 
   const [sessdata, setSessdata] = useState(MASK);
-  const [aiBaseUrl, setAiBaseUrl] = useState("https://api.openai.com/v1");
-  const [aiApiKey, setAiApiKey] = useState(MASK);
-  const [aiModel, setAiModel] = useState("gpt-4o");
   const [proxyList, setProxyList] = useState("");
   const [refreshWindowSize, setRefreshWindowSize] = useState(40);
 
@@ -121,8 +118,6 @@ export default function Settings() {
 
   const [sessdataTest, setSessdataTest] = useState<TestStatus>("idle");
   const [sessdataMessage, setSessdataMessage] = useState("");
-  const [aiTest, setAiTest] = useState<TestStatus>("idle");
-  const [aiMessage, setAiMessage] = useState("");
 
   const [lang, setLang] = useState<string>(localStorage.getItem("lang") || "zh");
 
@@ -131,9 +126,6 @@ export default function Settings() {
       .getSettings()
       .then((s) => {
         setSessdata(s.sessdata ? MASK : "");
-        setAiBaseUrl(s.ai_base_url || "https://api.openai.com/v1");
-        setAiApiKey(s.ai_api_key ? MASK : "");
-        setAiModel(s.ai_model || "gpt-4o");
         setProxyList(s.proxy_list || "");
         setRefreshWindowSize(s.refresh_window_size || 40);
       })
@@ -143,25 +135,16 @@ export default function Settings() {
       .finally(() => setLoading(false));
   }, []);
 
-  /** Any edit invalidates the last test result. */
-  function resetAiTest() {
-    setAiTest("idle");
-    setAiMessage("");
-  }
-
   async function handleSave() {
     setSaving(true);
     setSaved(false);
     setSaveError(null);
     try {
       const payload: Record<string, string | number> = {
-        ai_base_url: aiBaseUrl,
-        ai_model: aiModel,
         proxy_list: proxyList,
         refresh_window_size: refreshWindowSize,
       };
       if (sessdata !== MASK) payload.sessdata = sessdata;
-      if (aiApiKey !== MASK) payload.ai_api_key = aiApiKey;
 
       await api.updateSettings(payload);
       setSaved(true);
@@ -184,24 +167,6 @@ export default function Settings() {
     } catch {
       setSessdataTest("error");
       setSessdataMessage(t("settings.testFailed"));
-    }
-  }
-
-  async function handleTestAi() {
-    setAiTest("loading");
-    setAiMessage("");
-    try {
-      const res = await api.testAi({
-        ai_base_url: aiBaseUrl,
-        ai_api_key: aiApiKey,
-        ai_model: aiModel,
-      });
-      const ok = res.status === "ok";
-      setAiTest(ok ? "ok" : "error");
-      setAiMessage(res.message || (ok ? t("settings.testOk") : t("settings.testFailed")));
-    } catch {
-      setAiTest("error");
-      setAiMessage(t("settings.testFailed"));
     }
   }
 
@@ -281,63 +246,6 @@ export default function Settings() {
               aria-label={t("settings.refreshWindow")}
               className="w-28 tabular-nums"
             />
-          </SpecRow>
-
-          <SpecRow label={t("settings.aiConfig")} help={t("settings.aiHelp")}>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ai-base-url" className="column-label">
-                {t("settings.baseUrl")}
-              </Label>
-              <Input
-                id="ai-base-url"
-                value={aiBaseUrl}
-                onChange={(e) => {
-                  setAiBaseUrl(e.target.value);
-                  resetAiTest();
-                }}
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ai-api-key" className="column-label">
-                {t("settings.apiKey")}
-              </Label>
-              <SecretInput
-                id="ai-api-key"
-                value={aiApiKey}
-                onChange={(v) => {
-                  setAiApiKey(v);
-                  resetAiTest();
-                }}
-                placeholder="sk-..."
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ai-model" className="column-label">
-                {t("settings.model")}
-              </Label>
-              <Input
-                id="ai-model"
-                value={aiModel}
-                onChange={(e) => {
-                  setAiModel(e.target.value);
-                  resetAiTest();
-                }}
-                placeholder="gpt-4o"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestAi}
-                disabled={aiTest === "loading"}
-              >
-                {aiTest === "loading" && <InkPulse />}
-                {t("settings.testConnection")}
-              </Button>
-              <TestResult status={aiTest} message={aiMessage} />
-            </div>
           </SpecRow>
 
           <SpecRow label={t("settings.appearance")}>
