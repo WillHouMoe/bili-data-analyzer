@@ -9,9 +9,9 @@ import urllib.parse
 import uuid
 from datetime import UTC, datetime
 
-import defusedxml.ElementTree as ElementTree
 import httpx
 
+from app.core.time import as_china_time
 from app.services.proxy_pool import ProxyPool, redact_url
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,6 @@ _THROTTLE_STATE = {
     "rate_limit_count": 0,
     "base_delay": 1.5,
 }
-
 # Standard WBI mixin key permutation table
 MIXIN_KEY_ENC_TAB = [
     46,47,18,2,53,8,23,32,15,50,10,31,58,3,45,35,27,43,5,49,
@@ -294,6 +293,8 @@ class BilibiliClient:
         return {"uname": uname}
 
     async def get_user_info(self, uid: int) -> dict:
+        user_info: dict = {"uid": uid, "name": "", "avatar_url": ""}
+        card_metrics: dict = {}
         # Primary: x/web-interface/card (less strict rate limiting)
         try:
             data = await self._request(
@@ -301,21 +302,172 @@ class BilibiliClient:
                 params={"mid": uid, "photo": "false"},
             )
             if data.get("code") == 0:
-                card = data["data"]["card"]
-                return {"uid": uid, "name": card["name"], "avatar_url": card["face"]}
-            logger.info("card API returned code %s, falling back to acc/info", data.get("code"))
+                payload = data["data"]
+                card = payload["card"]
+                user_info.update(
+                    name=card["name"],
+                    avatar_url=card["face"],
+                )
+                card_metrics = {
+                    "followers": payload.get("follower") or card.get("fans"),
+                    "following": card.get("attention"),
+                    "archive_count": payload.get("archive_count"),
+                    "creator_total_likes": payload.get("like_num"),
+                }
+            else:
+                logger.info(
+                    "card API returned code %s, falling back to acc/info",
+                    data.get("code"),
+                )
         except Exception as e:
             logger.info("card API failed (%s), falling back to acc/info", e)
-        # Fallback: x/space/wbi/acc/info with WBI signing
+        if not user_info["name"]:
+            # Fallback: x/space/wbi/acc/info with WBI signing
+            data = await self._request(
+                f"{self.BASE}/x/space/wbi/acc/info",
+                params={"mid": uid},
+                wbi=True,
+            )
+            if data.get("code") != 0:
+                raise Exception(f"Bilibili API error {data.get('code')}: {data.get('message')}")
+            info = data["data"]
+            user_info.update(name=info["name"], avatar_url=info["face"])
+
+        metrics = await self.get_creator_metrics(uid)
+        return {
+            **user_info,
+            **{key: value for key, value in card_metrics.items() if value is not None},
+            **{key: value for key, value in metrics.items() if value is not None},
+        }
+
+    async def get_creator_metrics(self, uid: int) -> dict:
+        metrics: dict = {}
+        try:
+            relation = await self._request(
+                f"{self.BASE}/x/relation/stat",
+                params={"vmid": uid},
+            )
+            if relation.get("code") == 0:
+                data = relation.get("data") or {}
+                metrics["followers"] = data.get("follower")
+                metrics["following"] = data.get("following")
+        except Exception as exc:
+            logger.info("relation stats unavailable for uid %s: %s", uid, exc)
+
+        try:
+            upstat = await self._request(
+                f"{self.BASE}/x/space/upstat",
+                params={"mid": uid},
+            )
+            if upstat.get("code") == 0:
+                data = upstat.get("data") or {}
+                metrics["creator_total_views"] = (
+                    data.get("archive") or {}
+                ).get("view")
+                metrics["creator_total_likes"] = data.get("likes")
+        except Exception as exc:
+            logger.info("UP stats unavailable for uid %s: %s", uid, exc)
+
+        try:
+            navnum = await self._request(
+                f"{self.BASE}/x/space/navnum",
+                params={"mid": uid},
+            )
+            if navnum.get("code") == 0:
+                metrics["archive_count"] = (
+                    navnum.get("data") or {}
+                ).get("video")
+        except Exception as exc:
+            logger.info("archive count unavailable for uid %s: %s", uid, exc)
+        return metrics
+
+    def _normalize_ranking_item(
+        self,
+        item: dict,
+        rank: int,
+        kind: str,
+        period: str,
+        period_name: str | None,
+    ) -> dict | None:
+        bvid = item.get("bvid")
+        owner = item.get("owner") or {}
+        if not bvid or not owner.get("mid"):
+            return None
+        stats = item.get("stat") or {}
+        return {
+            "kind": kind,
+            "period": period,
+            "period_name": period_name,
+            "rank": rank,
+            "bvid": bvid,
+            "title": item.get("title") or bvid,
+            "owner_uid": int(owner["mid"]),
+            "owner_name": owner.get("name") or "",
+            "cover_url": item.get("pic"),
+            "views": int(stats.get("view", 0) or 0),
+            "likes": int(stats.get("like", 0) or 0),
+            "score": float(item.get("score", 0) or 0),
+        }
+
+    async def get_site_ranking(self) -> list[dict]:
         data = await self._request(
-            f"{self.BASE}/x/space/wbi/acc/info",
-            params={"mid": uid},
-            wbi=True,
+            f"{self.BASE}/x/web-interface/ranking/v2",
+            params={"rid": 0, "type": "all"},
         )
         if data.get("code") != 0:
-            raise Exception(f"Bilibili API error {data.get('code')}: {data.get('message')}")
-        info = data["data"]
-        return {"uid": uid, "name": info["name"], "avatar_url": info["face"]}
+            raise Exception(
+                f"Bilibili API error {data.get('code')}: {data.get('message')}"
+            )
+        payload = data.get("data") or {}
+        period = as_china_time(datetime.now(UTC)).date().isoformat()
+        entries = []
+        for index, item in enumerate(payload.get("list") or [], start=1):
+            normalized = self._normalize_ranking_item(
+                item,
+                index,
+                "popular",
+                period,
+                payload.get("note"),
+            )
+            if normalized:
+                entries.append(normalized)
+        return entries
+
+    async def get_weekly_must_watch(self) -> list[dict]:
+        series = await self._request(
+            f"{self.BASE}/x/web-interface/popular/series/list"
+        )
+        if series.get("code") != 0:
+            raise Exception(
+                f"Bilibili API error {series.get('code')}: {series.get('message')}"
+            )
+        lists = (series.get("data") or {}).get("list") or []
+        latest = next((item for item in lists if item.get("status") == 2), None)
+        if latest is None:
+            return []
+        number = int(latest["number"])
+        detail = await self._request(
+            f"{self.BASE}/x/web-interface/popular/series/one",
+            params={"number": number},
+        )
+        if detail.get("code") != 0:
+            raise Exception(
+                f"Bilibili API error {detail.get('code')}: {detail.get('message')}"
+            )
+        payload = detail.get("data") or {}
+        period = f"weekly-{number}"
+        entries = []
+        for index, item in enumerate(payload.get("list") or [], start=1):
+            normalized = self._normalize_ranking_item(
+                item,
+                index,
+                "weekly",
+                period,
+                latest.get("name"),
+            )
+            if normalized:
+                entries.append(normalized)
+        return entries
 
     def _normalize_video_stub(self, raw: dict, source: str) -> dict | None:
         bvid = raw.get("bvid") or ""
@@ -433,31 +585,50 @@ class BilibiliClient:
 
     async def get_video_index(self, uid: int) -> dict:
         expected_total = await self._get_expected_video_total(uid)
-        result = await self._video_index_via_rec_archives_full(uid)
+        try:
+            result = await self._video_index_via_rec_archives_full(uid)
+        except Exception as e:
+            logger.warning(
+                "recArchivesByKeywords unavailable for uid %s (%s); "
+                "falling back to WBI arc/search",
+                uid,
+                e,
+            )
+            result = await self._video_index_via_arc_search(uid)
         raw_videos = self._dedupe_video_stubs(result.get("videos") or [])
         videos = self._filter_live_replay_stubs(raw_videos)
         is_complete = self._is_complete_video_index(result, expected_total)
+        source = result.get("source") or "rec_archives_full"
         logger.info(
-            "Video index fetched via rec_archives_full for uid %s: expected=%s raw=%d unique=%d complete=%s",
-            uid, expected_total, len(raw_videos), len(videos), is_complete,
+            "Video index fetched via %s for uid %s: expected=%s raw=%d unique=%d complete=%s",
+            source, uid, expected_total, len(raw_videos), len(videos), is_complete,
         )
         return {
             "videos": videos,
             "total": len(videos),
             "expected_total": expected_total,
-            "source": "rec_archives_full",
+            "source": source,
             "is_complete_snapshot": is_complete,
         }
 
     async def get_video_index_in_range(self, uid: int, start_date, end_date) -> dict:
-        result = await self._video_index_via_rec_archives_hybrid(uid, start_date, end_date)
+        try:
+            result = await self._video_index_via_rec_archives_hybrid(uid, start_date, end_date)
+        except Exception as e:
+            logger.warning(
+                "recArchivesByKeywords unavailable for uid %s (%s); "
+                "falling back to WBI arc/search",
+                uid,
+                e,
+            )
+            result = await self._video_index_via_arc_search(uid, start_date=start_date)
         raw_videos = self._dedupe_video_stubs(result.get("videos") or [])
         ranged_videos = self._filter_videos_by_date(raw_videos, start_date, end_date)
         videos = self._filter_live_replay_stubs(ranged_videos)
         return {
             "videos": videos,
             "total": len(videos),
-            "source": "rec_archives_full",
+            "source": result.get("source") or "rec_archives_full",
             "is_complete_snapshot": bool(result.get("is_complete_snapshot")),
         }
 
@@ -488,6 +659,86 @@ class BilibiliClient:
             "page": page_info,
         }
 
+    async def _fetch_arc_search_page(self, uid: int, pn: int, page_size: int = 50) -> dict:
+        data = await self._request(
+            f"{self.BASE}/x/space/wbi/arc/search",
+            params={"mid": uid, "pn": pn, "ps": page_size, "order": "pubdate"},
+            wbi=True,
+        )
+        if data.get("code") != 0:
+            raise Exception(f"Bilibili API error {data.get('code')}: {data.get('message')}")
+        payload = data.get("data") or {}
+        raw_videos = payload.get("list", {}).get("vlist") or []
+        videos = [
+            video for item in raw_videos
+            if (video := self._normalize_video_stub(item, "arc_search"))
+        ]
+        raw_page = payload.get("page") or {}
+        return {
+            "videos": videos,
+            "raw_videos": raw_videos,
+            "page": {
+                "num": pn,
+                "size": len(raw_videos),
+                "total": int(raw_page.get("count", 0) or 0),
+            },
+        }
+
+    async def _video_index_via_arc_search(self, uid: int, start_date=None) -> dict:
+        """Fetch a creator's archive through the standard WBI-signed endpoint.
+
+        This is the fallback for recArchivesByKeywords, which intermittently
+        answers 412 or -504 even when SESSDATA is valid. When start_date is
+        supplied, stop once the newest-to-oldest scan has passed that boundary.
+        """
+        page_size = 50
+        max_pages = 200
+        videos: list[dict] = []
+        seen_page_signatures: set[tuple[str, ...]] = set()
+        is_complete_snapshot = False
+        result_total = 0
+
+        for page_num in range(1, max_pages + 1):
+            page_result = await self._fetch_arc_search_page(
+                uid, pn=page_num, page_size=page_size
+            )
+            page_videos = page_result.get("videos") or []
+            raw_videos = page_result.get("raw_videos") or []
+            page_info = page_result.get("page") or {}
+            result_total = max(result_total, int(page_info.get("total", 0) or 0))
+
+            if not raw_videos:
+                is_complete_snapshot = True
+                break
+
+            page_signature = tuple(video["bvid"] for video in page_videos if video.get("bvid"))
+            if page_signature and page_signature in seen_page_signatures:
+                logger.warning("Duplicate arc/search page detected for uid %s page %s", uid, page_num)
+                break
+            if page_signature:
+                seen_page_signatures.add(page_signature)
+
+            videos.extend(page_videos)
+            videos = self._dedupe_video_stubs(videos)
+
+            _, page_oldest = self._video_date_bounds(page_videos)
+            if start_date is not None and page_oldest is not None and page_oldest <= start_date:
+                is_complete_snapshot = True
+                break
+            if result_total and page_num * page_size >= result_total:
+                is_complete_snapshot = True
+                break
+            if 0 < len(raw_videos) < page_size:
+                is_complete_snapshot = True
+                break
+
+        return {
+            "videos": videos,
+            "total": result_total or len(videos),
+            "source": "arc_search",
+            "is_complete_snapshot": is_complete_snapshot,
+        }
+
     async def _video_index_via_rec_archives_hybrid(self, uid: int, start_date, end_date) -> dict:
         page_size = 100
         max_pages = 100
@@ -499,6 +750,7 @@ class BilibiliClient:
             return {
                 "videos": self._dedupe_video_stubs(videos),
                 "total": len(videos),
+                "source": "rec_archives_full",
                 "is_complete_snapshot": True,
             }
 
@@ -539,6 +791,7 @@ class BilibiliClient:
         return {
             "videos": videos,
             "total": len(videos),
+            "source": "rec_archives_full",
             "is_complete_snapshot": is_complete_snapshot,
         }
 
@@ -585,6 +838,7 @@ class BilibiliClient:
         return {
             "videos": videos,
             "total": result_total or len(videos),
+            "source": "rec_archives_full",
             "is_complete_snapshot": is_complete_snapshot,
         }
 
@@ -610,15 +864,11 @@ class BilibiliClient:
         except Exception:
             pass
         pages = d.get("pages") or []
-        page_cids = [{"page": p["page"], "cid": p["cid"], "part": p.get("part", "")} for p in pages]
         page_parts = [p.get("part", "") for p in pages]
-        subtitle_list = d.get("subtitle", {}).get("list") or []
-        has_subtitle = len(subtitle_list) > 0
         title = d["title"]
         return {
-            "bvid": d["bvid"], "aid": d["aid"], "cid": d["cid"],
-            "page_cids": page_cids,
-            "has_subtitle": has_subtitle,
+            "bvid": d["bvid"],
+            "owner_uid": d.get("owner", {}).get("mid"),
             "is_live_replay": self._is_live_replay_video(title, page_parts),
             "title": title, "description": d.get("desc", ""),
             "cover_url": d["pic"], "duration": d["duration"],
@@ -630,66 +880,4 @@ class BilibiliClient:
                 "shares": stat["share"], "danmaku_count": stat["danmaku"],
                 "comment_count": stat["reply"],
             },
-        }
-
-    async def get_comments(self, aid: int, max_pages: int = 5) -> list[dict]:
-        comments = []
-        for page in range(1, max_pages + 1):
-            data = await self._request(
-                f"{self.BASE}/x/v2/reply",
-                params={"type": 1, "oid": aid, "pn": page, "sort": 1}
-            )
-            replies = data.get("data", {}).get("replies") or []
-            if not replies:
-                break
-            comments.extend(
-                {
-                    "text": r["content"]["message"],
-                    "uid": r.get("member", {}).get("mid"),
-                    "user": r.get("member", {}).get("uname", ""),
-                    "location": r.get("reply_control", {}).get("location", ""),
-                    "user_level": r.get("member", {}).get("level_info", {}).get("current_level"),
-                    "user_sex": r.get("member", {}).get("sex"),
-                    "vip_status": r.get("member", {}).get("vip", {}).get("vipStatus"),
-                    "vip_type": r.get("member", {}).get("vip", {}).get("vipType"),
-                    "official_verify_type": r.get("member", {}).get("official_verify", {}).get("type"),
-                    "like": r.get("like", 0),
-                    "reply_count": r.get("rcount", 0),
-                    "up_liked": r.get("up_action", {}).get("like", False),
-                    "up_replied": r.get("up_action", {}).get("reply", False)
-                }
-                for r in replies
-            )
-        return comments
-
-    async def get_danmakus(self, cid: int) -> list[str]:
-        if not self._sessdata:
-            return []
-        await self._throttle()
-        resp = await self._client.get(f"https://comment.bilibili.com/{cid}.xml")
-        resp.raise_for_status()
-        root = ElementTree.fromstring(resp.content)
-        return [d.text for d in root.findall(".//d") if d.text]
-
-    async def get_subtitle(self, bvid: str, aid: int, cid: int) -> str:
-        if not self._sessdata:
-            return ""
-        data = await self._request(
-            f"{self.BASE}/x/player/wbi/v2",
-            params={"aid": aid, "bvid": bvid, "cid": cid},
-            wbi=True,
-            use_proxy=False,
-        )
-        subtitles = data.get("data", {}).get("subtitle", {}).get("subtitles", [])
-        if not subtitles:
-            return ""
-        subtitle_url = subtitles[0].get("subtitle_url", "")
-        if not subtitle_url:
-            return ""
-        if subtitle_url.startswith("//"):
-            subtitle_url = "https:" + subtitle_url
-        await self._throttle()
-        resp = await self._client.get(subtitle_url)
-        resp.raise_for_status()
-        sub_data = resp.json()
-        return " ".join(item["content"] for item in sub_data.get("body", []))
+}

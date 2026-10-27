@@ -12,12 +12,12 @@ import type { TrendPoint } from "@/types";
  * vermilion. A record is drawn as it happened, not curved into a nicer shape.
  */
 export default function ViewsTrendChart({
-  queryId,
+  creatorId,
   height = 236,
   onPointClick,
   selectedDate,
 }: {
-  queryId: number;
+  creatorId: number;
   height?: number;
   onPointClick?: (date: string) => void;
   /** Date of the reading whose note is open. */
@@ -31,12 +31,12 @@ export default function ViewsTrendChart({
   useEffect(() => {
     let active = true;
     api
-      .getTrend(queryId)
+      .getCreatorTrend(creatorId)
       .then((d) => { if (active) setData(d); })
       .catch(() => { if (active) setData([]); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [queryId]);
+  }, [creatorId]);
 
   const peak = useMemo(
     () => data.reduce((best, p, i) => (p.views > (data[best]?.views ?? -1) ? i : best), 0),

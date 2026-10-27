@@ -3,13 +3,7 @@ import { useParams, useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftIcon } from "lucide-react";
 import { api } from "@/lib/api";
-import type {
-  VideoDetail,
-  VideoComparison,
-  UserDemographicsResponse,
-  DemographicsFilter,
-} from "@/types";
-import { createEmptyFilter } from "@/types";
+import type { VideoDetail, VideoComparison } from "@/types";
 import { formatCount, formatExact, formatDuration, formatPercent } from "@/lib/format";
 import Masthead from "@/components/proof/Masthead";
 import Ledger, { type LedgerRow } from "@/components/proof/Ledger";
@@ -19,9 +13,8 @@ import { Button } from "@/components/ui/button";
 import VideoHeader from "@/components/video/VideoHeader";
 import RadarChart from "@/components/video/RadarChart";
 import ComparisonBars from "@/components/video/ComparisonBars";
-import VideoWordTables from "@/components/video/VideoWordTables";
-import UserDemographicsPanel from "@/components/shared/UserDemographicsPanel";
-import SentimentPanel from "@/components/sentiment/SentimentPanel";
+import VideoGrowthChart from "@/components/video/VideoGrowthChart";
+import RankingHighlights from "@/components/dashboard/RankingHighlights";
 import AIPanel from "@/components/dashboard/AIPanel";
 
 export default function VideoDetailPage() {
@@ -29,13 +22,10 @@ export default function VideoDetailPage() {
   const lang = i18n.language;
   const { bvid } = useParams<{ bvid: string }>();
   const [searchParams] = useSearchParams();
-  const queryId = searchParams.get("query") ? Number(searchParams.get("query")) : null;
+  const creatorId = searchParams.get("uid") ? Number(searchParams.get("uid")) : null;
 
   const [video, setVideo] = useState<VideoDetail | null>(null);
   const [comparison, setComparison] = useState<VideoComparison | null>(null);
-  const [demographics, setDemographics] = useState<UserDemographicsResponse | null>(null);
-  const [demographicsError, setDemographicsError] = useState<string | null>(null);
-  const [demoFilter, setDemoFilter] = useState<DemographicsFilter>(createEmptyFilter);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
@@ -43,31 +33,20 @@ export default function VideoDetailPage() {
   useEffect(() => {
     if (!bvid) return;
 
-    const jobs: Promise<unknown>[] = [
-      api.getVideo(bvid).then(setVideo),
-      api
-        .getVideoDemographics(bvid)
-        .then((result) => {
-          setDemographics(result);
-          setDemographicsError(null);
-        })
-        .catch(() => {
-          setDemographics(null);
-          setDemographicsError(t("common.error"));
-        }),
-    ];
+    const jobs: Promise<unknown>[] = [api.getVideo(bvid).then(setVideo)];
 
-    if (queryId) {
-      // Comparison needs a run to compare against; its absence is not an error.
-      jobs.push(api.getComparison(bvid, queryId).then(setComparison).catch(() => {}));
+    if (creatorId) {
+      // Comparison needs a creator library to compare against; its absence is
+      // not an error.
+      jobs.push(api.getCreatorComparison(creatorId, bvid).then(setComparison).catch(() => {}));
     }
 
     Promise.all(jobs)
       .catch(() => setError(t("common.error")))
       .finally(() => setLoading(false));
-  }, [bvid, queryId, t]);
+  }, [bvid, creatorId, t]);
 
-  const backTo = queryId ? `/dashboard/${queryId}` : "/dashboard";
+  const backTo = creatorId ? `/dashboard/${creatorId}` : "/dashboard";
 
   const ledgerRows = useMemo<LedgerRow[]>(() => {
     if (!video) return [];
@@ -154,6 +133,24 @@ export default function VideoDetailPage() {
           <Ledger rows={ledgerRows} />
         </InkIn>
 
+        <Section label={t("chart.videoGrowth")}>
+          <Column label={t("chart.videoGrowthAxis")}>
+            <VideoGrowthChart bvid={video.bvid} />
+          </Column>
+        </Section>
+
+        {video.rankings.length > 0 && (
+          <Section label={t("ranking.videoSection")}>
+            <Column label={t("ranking.current")}>
+              <RankingHighlights
+                items={video.rankings}
+                creatorId={creatorId ?? undefined}
+                showTitle={false}
+              />
+            </Column>
+          </Section>
+        )}
+
         {comparison && (
           <Section label={t("video.comparison")}>
             <Columns className="lg:grid-cols-2">
@@ -167,35 +164,17 @@ export default function VideoDetailPage() {
           </Section>
         )}
 
-        {(demographics || demographicsError) && (
-          <Section label={t("section.audience")}>
-            <UserDemographicsPanel
-              data={demographics}
-              error={demographicsError}
-              filter={demoFilter}
-              onFilterChange={setDemoFilter}
-            />
-          </Section>
-        )}
-
-        <Section label={t("section.words")}>
-          <VideoWordTables
-            bvid={video.bvid}
-            hasSubtitle={video.has_subtitle}
-            filter={demoFilter}
-          />
-        </Section>
-
-        <Section label={t("section.sentiment")}>
-          <SentimentPanel key={video.bvid} bvid={video.bvid} />
-        </Section>
-
-        <Colophon items={[video.bvid, queryId ? `${t("colophon.query")} #${queryId}` : null]} />
+        <Colophon
+          items={[
+            video.bvid,
+            creatorId ? `${t("colophon.creator")} ${creatorId}` : null,
+          ]}
+        />
       </div>
 
       <AIPanel
         bvid={video.bvid}
-        queryId={queryId ?? undefined}
+        uid={creatorId ?? undefined}
         open={aiOpen}
         onOpenChange={setAiOpen}
       />

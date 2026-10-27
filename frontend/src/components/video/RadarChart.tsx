@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 import { useTranslation } from "react-i18next";
 import { chartBase, useChartTokens, NAME_SIZE } from "@/lib/chart-theme";
+import { formatRadarTooltip } from "@/lib/radar-tooltip";
 import { NoInk } from "@/components/proof/States";
 import type { VideoComparison } from "@/types";
 
@@ -17,7 +18,8 @@ export default function RadarChart({
   data: VideoComparison | null;
   height?: number;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const k = useChartTokens();
 
   const labels = useMemo(
@@ -40,7 +42,22 @@ export default function RadarChart({
 
     return {
       ...chartBase(k),
-      tooltip: { ...chartBase(k).tooltip, trigger: "item" },
+      tooltip: {
+        ...chartBase(k).tooltip,
+        trigger: "item",
+        formatter: (params: {
+          dataIndex?: number;
+          marker?: string;
+          name?: string;
+          seriesName?: string;
+        }) =>
+          formatRadarTooltip(
+            params,
+            labels,
+            params.dataIndex === 1 ? data.average_values : data.video_values,
+            lang,
+          ),
+      },
       legend: {
         data: [t("video.thisVideo"), t("video.average")],
         textStyle: { color: k.ink3, fontSize: NAME_SIZE, fontFamily: k.font },
@@ -83,7 +100,7 @@ export default function RadarChart({
         },
       ],
     };
-  }, [data, labels, k, t]);
+  }, [data, labels, k, lang, t]);
 
   if (!option) return <NoInk className="py-16" />;
 

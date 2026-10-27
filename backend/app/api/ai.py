@@ -27,6 +27,7 @@ from app.services.ai_service import (
     stream_agent_response,
 )
 from app.services.ai_tools import get_tools
+from app.services.creator_library import creator_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,12 @@ def _detect_lang(request: Request) -> str:
     return "en" if accept.startswith("en") else "zh"
 
 
-async def _list_conversations(db: AsyncSession, query_id: int | None, bvid: str | None):
+async def _list_conversations(
+    db: AsyncSession,
+    query_id: int | None,
+    bvid: str | None,
+    uid: int | None = None,
+):
     stmt = select(
         AIConversation,
         func.count(AIMessage.id).label("msg_count"),
@@ -48,6 +54,8 @@ async def _list_conversations(db: AsyncSession, query_id: int | None, bvid: str 
         stmt = stmt.where(AIConversation.query_id == query_id)
     if bvid is not None:
         stmt = stmt.where(AIConversation.bvid == bvid)
+    if uid is not None:
+        stmt = stmt.where(AIConversation.uid == uid)
 
     stmt = stmt.order_by(AIConversation.updated_at.desc())
     result = await db.execute(stmt)
@@ -123,13 +131,16 @@ async def _get_conversation_detail(db: AsyncSession, conv_id: int):
 
     return ConversationDetail(
         id=conv.id, preset=conv.preset, title=conv.title,
-        query_id=conv.query_id, bvid=conv.bvid, messages=visible,
+        uid=conv.uid, query_id=conv.query_id, bvid=conv.bvid, messages=visible,
     )
 
 
 async def _create_conversation_stream(
     db: AsyncSession, request: Request,
-    query_id: int | None, bvid: str | None, body: CreateConversationRequest,
+    query_id: int | None,
+    bvid: str | None,
+    body: CreateConversationRequest,
+    uid: int | None = None,
 ):
     preset = body.preset
     lang = _detect_lang(request)
@@ -143,6 +154,10 @@ async def _create_conversation_stream(
         video = await db.get(Video, bvid)
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
+        uid = uid or video.uid
+    creator = await creator_snapshot(db, uid) if uid is not None else None
+    if uid is not None and creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
 
     # Determine title
     title_prefix = {"overall_analysis": "Overall", "topic_inspiration": "Topics", "video_analysis": "Video", "free_chat": "Chat"}
@@ -150,22 +165,38 @@ async def _create_conversation_stream(
 
     # Create conversation
     conv = AIConversation(
-        query_id=query_id, bvid=bvid, preset=preset, title=title,
+        uid=uid, query_id=query_id, bvid=bvid, preset=preset, title=title,
         created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
     )
     db.add(conv)
     await db.flush()
 
     # Save system + initial user messages
-    system_content = get_system_prompt(lang, query_id=query_id, bvid=bvid, query_meta=(
-        {
+    if creator is not None:
+        meta = {
+            "user_name": creator.user.name,
+            "video_count": creator.video_count,
+            "start_date": creator.start_date.isoformat() if creator.start_date else None,
+            "end_date": creator.end_date.isoformat() if creator.end_date else None,
+            "total_views": creator.total_views,
+        }
+    elif query_id is not None and query:
+        meta = {
             "user_name": query.user_name,
             "video_count": query.video_count,
             "start_date": query.start_date.isoformat() if query.start_date else None,
             "end_date": query.end_date.isoformat() if query.end_date else None,
             "total_views": query.total_views,
-        } if query_id is not None and query else None
-    ))
+        }
+    else:
+        meta = None
+    system_content = get_system_prompt(
+        lang,
+        uid=uid,
+        query_id=query_id,
+        bvid=bvid,
+        query_meta=meta,
+    )
     initial_msg = body.content if (preset == "free_chat" and body.content) else get_initial_message(preset)
     await save_message(db, conv.id, "system", content=system_content)
     await save_message(db, conv.id, "user", content=initial_msg)
@@ -181,7 +212,7 @@ async def _create_conversation_stream(
         {"role": "user", "content": initial_msg},
     ]
     tools = get_tools()
-    context = {"query_id": query_id, "bvid": bvid}
+    context = {"uid": uid, "query_id": query_id, "bvid": bvid}
 
     try:
         client, model = await get_openai_client(db)
@@ -226,7 +257,7 @@ async def _send_message_stream(
     messages = build_messages_from_db(all_msgs)
 
     tools = get_tools()
-    context = {"query_id": conv.query_id, "bvid": conv.bvid}
+    context = {"uid": conv.uid, "query_id": conv.query_id, "bvid": conv.bvid}
 
     try:
         client, model = await get_openai_client(db)
@@ -282,6 +313,74 @@ async def send_query_message(
     query_id: int, conv_id: int, body: SendMessageRequest,
     request: Request, db: AsyncSession = Depends(get_db),
 ):
+    return await _send_message_stream(db, request, conv_id, body)
+
+
+# --- Creator-scoped endpoints ---
+
+@router.get("/creators/{uid}/ai/conversations", response_model=list[ConversationSummary])
+async def list_creator_conversations(uid: int, db: AsyncSession = Depends(get_db)):
+    return await _list_conversations(db, query_id=None, bvid=None, uid=uid)
+
+
+@router.post("/creators/{uid}/ai/conversations")
+async def create_creator_conversation(
+    uid: int,
+    body: CreateConversationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    return await _create_conversation_stream(
+        db,
+        request,
+        query_id=None,
+        bvid=None,
+        body=body,
+        uid=uid,
+    )
+
+
+@router.get(
+    "/creators/{uid}/ai/conversations/{conv_id}",
+    response_model=ConversationDetail,
+)
+async def get_creator_conversation(
+    uid: int,
+    conv_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await db.get(AIConversation, conv_id)
+    if conv is None or conv.uid != uid:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return await _get_conversation_detail(db, conv_id)
+
+
+@router.delete(
+    "/creators/{uid}/ai/conversations/{conv_id}",
+    status_code=204,
+)
+async def delete_creator_conversation(
+    uid: int,
+    conv_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await db.get(AIConversation, conv_id)
+    if conv is None or conv.uid != uid:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    await _delete_conversation(db, conv_id)
+
+
+@router.post("/creators/{uid}/ai/conversations/{conv_id}/messages")
+async def send_creator_message(
+    uid: int,
+    conv_id: int,
+    body: SendMessageRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await db.get(AIConversation, conv_id)
+    if conv is None or conv.uid != uid:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     return await _send_message_stream(db, request, conv_id, body)
 
 

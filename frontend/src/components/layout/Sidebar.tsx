@@ -17,7 +17,7 @@ import { api } from "@/lib/api";
 import { formatCount } from "@/lib/format";
 import { useTheme } from "@/hooks/useTheme";
 import { CircleMark, DeleteMark } from "@/components/proof/marks";
-import type { QuerySummary } from "@/types";
+import type { CreatorSummary } from "@/types";
 import NewQueryDialog from "@/components/dashboard/NewQueryDialog";
 
 interface SidebarProps {
@@ -29,21 +29,22 @@ const THEME_ORDER = ["light", "dark", "system"] as const;
 export default function Sidebar({ onNavigate }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { queryId } = useParams<{ queryId?: string }>();
+  const { uid: activeUid } = useParams<{ uid?: string }>();
   const { theme, setTheme } = useTheme();
 
-  const [queries, setQueries] = useState<QuerySummary[]>([]);
+  const [creators, setCreators] = useState<CreatorSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<QuerySummary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CreatorSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    async function fetchQueries() {
+    async function fetchCreators() {
       try {
-        const data = await api.getQueries();
-        if (active) setQueries(data);
+        const data = await api.getCreators();
+        if (active) setCreators(data);
       } catch {
         // The index keeps its last good state; the sheet says nothing it cannot prove.
       } finally {
@@ -51,8 +52,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       }
     }
 
-    fetchQueries();
-    const id = setInterval(fetchQueries, 3000);
+    fetchCreators();
+    const id = setInterval(fetchCreators, 3000);
     return () => {
       active = false;
       clearInterval(id);
@@ -77,15 +78,15 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
   async function handleDelete() {
     if (!deleteTarget) return;
-    const deletedId = deleteTarget.id;
+    const deletedUid = deleteTarget.uid;
+    setDeleteError(null);
     try {
-      await api.deleteQuery(deletedId);
-      setQueries((prev) => prev.filter((q) => q.id !== deletedId));
-      if (queryId === String(deletedId)) navigate("/dashboard");
-    } catch {
-      // Deletion failed; the next poll restores the true list.
-    } finally {
+      await api.deleteCreator(deletedUid);
+      setCreators((prev) => prev.filter((creator) => creator.uid !== deletedUid));
+      if (activeUid === String(deletedUid)) navigate("/dashboard");
       setDeleteTarget(null);
+    } catch {
+      setDeleteError(t("sidebar.deleteFailed"));
     }
   }
 
@@ -104,27 +105,28 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
         <div className="px-4 py-3">
           <Button variant="default" size="lg" className="w-full" onClick={() => setDialogOpen(true)}>
-            {t("app.newQuery")}
+            {t("app.addCreator")}
           </Button>
         </div>
 
         {/* 稿件目錄 */}
         <div className="flex min-h-0 flex-1 flex-col">
-          <p className="column-label px-4 pb-1.5">{t("sidebar.queryHistory")}</p>
+          <p className="column-label px-4 pb-1.5">{t("sidebar.creatorIndex")}</p>
 
           <ScrollArea className="min-h-0 flex-1">
             <ul className="border-t border-rule">
-              {loaded && queries.length === 0 && (
+              {loaded && creators.length === 0 && (
                 <li className="px-4 py-4 text-note leading-relaxed text-ink-3">
                   {t("sidebar.emptyIndex")}
                 </li>
               )}
-              {queries.map((q) => {
-                const isActive = queryId === String(q.id);
-                const busy = q.status === "fetching" || q.status === "fetching_content";
+              {creators.map((creator) => {
+                const isActive = activeUid === String(creator.uid);
+                const busy =
+                  creator.status === "pending" || creator.status === "fetching";
                 return (
                   <li
-                    key={q.id}
+                    key={creator.uid}
                     className={cn(
                       "group relative border-b border-rule transition-colors",
                       isActive ? "bg-paper" : "hover:bg-paper-2",
@@ -135,7 +137,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                     )}
                     <button
                       type="button"
-                      onClick={() => go(`/dashboard/${q.id}`)}
+                      onClick={() => go(`/dashboard/${creator.uid}`)}
                       className="w-full py-2.5 pr-8 pl-6 text-left outline-none focus-visible:bg-paper-2"
                       aria-current={isActive ? "true" : undefined}
                     >
@@ -145,18 +147,18 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                           isActive ? "text-mark" : "text-ink",
                         )}
                       >
-                        {q.user_name || `UID ${q.uid}`}
+                        {creator.name || `UID ${creator.uid}`}
                       </p>
                       <p className="mt-0.5 truncate text-note tabular-nums text-ink-3">
-                        {q.start_date} — {q.end_date}
+                        {creator.start_date ?? "—"} — {creator.end_date ?? "—"}
                       </p>
                       <p className="text-note tabular-nums text-ink-3">
                         {t("sidebar.summary", {
-                          videos: q.video_count,
-                          views: formatCount(q.total_views, i18n.language),
+                          videos: creator.video_count,
+                          views: formatCount(creator.total_views, i18n.language),
                         })}
                       </p>
-                      {q.status !== "done" && (
+                      {creator.status !== "done" && (
                         <p
                           className={cn(
                             "mt-1 truncate text-note",
@@ -164,8 +166,10 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                           )}
                         >
                           {busy
-                            ? (q.progress ?? t("press.running"))
-                            : t(`press.status.${q.status}`, { defaultValue: q.status })}
+                            ? (creator.progress ?? t("press.running"))
+                            : t(`press.status.${creator.status}`, {
+                                defaultValue: creator.status,
+                              })}
                         </p>
                       )}
                     </button>
@@ -173,10 +177,10 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDeleteTarget(q);
+                        setDeleteTarget(creator);
                       }}
                       className="absolute top-2.5 right-2 p-1 text-ink-3 opacity-0 transition-opacity hover:text-mark focus-visible:opacity-100 group-hover:opacity-100"
-                      aria-label={t("sidebar.deleteQuery")}
+                      aria-label={t("sidebar.deleteCreator")}
                     >
                       <DeleteMark className="size-4" />
                     </button>
@@ -219,22 +223,39 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
       <NewQueryDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("sidebar.deleteConfirmTitle")}</DialogTitle>
             <DialogDescription>
               {t("sidebar.deleteConfirmDesc", {
-                name: deleteTarget?.user_name || `UID ${deleteTarget?.uid}`,
+                name: deleteTarget?.name || `UID ${deleteTarget?.uid}`,
               })}
             </DialogDescription>
+            {deleteError && (
+              <p className="text-note text-mark">{deleteError}</p>
+            )}
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+            >
               {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
-              {t("sidebar.deleteQuery")}
+              {t("sidebar.deleteCreator")}
             </Button>
           </DialogFooter>
         </DialogContent>

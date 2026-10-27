@@ -1,17 +1,22 @@
 {
   "app": {
-    "title": "BiliAnalyzer",
+    "title": "BiliDataAnalyzer",
     "tagline": "视频数据校样",
     "newQuery": "新建查询",
+    "addCreator": "添加 UP 主",
+    "appendFetch": "追加抓取",
+    "refreshStats": "采集新快照",
+    "refreshingStats": "采集中……",
     "openIndex": "打开目录"
   },
   "sidebar": {
-    "queryHistory": "稿件目录",
-    "emptyIndex": "还没有稿件。新建一次查询，抓取某位 UP 主在一段时间里的全部视频数据。",
+    "creatorIndex": "UP 主目录",
+    "emptyIndex": "目录还是空的。添加一位 UP 主，抓取其在指定时间段发布的视频。",
     "summary": "{{videos}} 支视频 · {{views}} 次播放",
-    "deleteQuery": "删除",
-    "deleteConfirmTitle": "删除这份稿件",
-    "deleteConfirmDesc": "「{{name}}」的查询记录与全部相关数据将被永久删除，无法恢复。"
+    "deleteCreator": "删除",
+    "deleteConfirmTitle": "删除这位 UP 主",
+    "deleteConfirmDesc": "「{{name}}」以及该作品库中的全部视频、抓取批次和 AI 对话将被永久删除，无法恢复。",
+    "deleteFailed": "删除失败，请查看服务器日志后重试。"
   },
   "theme": {
     "light": "浅色",
@@ -19,39 +24,35 @@
     "system": "跟随系统"
   },
   "masthead": {
-    "span": "时间段",
-    "printRun": "印次：{{filters}}"
+    "span": "时间段"
   },
   "section": {
     "performance": "版面分析",
-    "audience": "受众维度",
-    "words": "词表",
-    "sentiment": "情感",
     "catalogue": "视频目录"
   },
   "note": {
     "topTen": "依此指标排名前十",
     "publishedOn": "当天发布",
-    "inBand": "此时长区间",
-    "inSlot": "此时段发布"
+    "inBand": "此时长区间"
   },
   "colophon": {
-    "query": "稿件",
+    "query": "批次",
+    "creator": "UP 主",
+    "fetches": "{{n}} 个抓取批次",
     "fetched": "抓取于"
   },
   "blank": {
     "title": "空白样张",
-    "note": "从目录里选一份稿件，或新建一次查询：输入 UP 主 UID 与时间段，抓取该区间内全部视频的播放、互动、弹幕与评论。",
+    "note": "从目录里选一位 UP 主，或输入 UID 与时间段添加。后续抓取会并入同一个作品库。",
     "loadingNote": "正在上墨。"
   },
   "press": {
     "title": "付印工序",
     "running": "进行中",
+    "previousFetchFailed": "较早的抓取曾经失败，但已保存的作品库仍可正常使用。",
     "failedTitle": "这一版没能付印",
     "stage": {
-      "index": "视频清单与互动数据",
-      "content": "弹幕、评论与字幕",
-      "sentiment": "情感分析"
+      "index": "视频清单与互动数据"
     },
     "state": {
       "done": "已完成",
@@ -81,6 +82,11 @@
     "danmaku": "弹幕",
     "comments": "评论",
     "videos": "视频数",
+    "followers": "粉丝",
+    "creatorViews": "账号总播放",
+    "creatorLikes": "账号总获赞",
+    "archiveCount": "账号投稿",
+    "following": "关注",
     "interactionRate": "互动率",
     "avgViews": "平均播放",
     "avgInteraction": "平均互动率",
@@ -91,11 +97,17 @@
     "interaction": "互动数据对比",
     "scatter": "播放量 vs 互动率",
     "scatterFormula": "互动率 =（点赞 + 投币 + 收藏 + 分享）/ 播放量 × 100%",
-    "publishTimeHeatmap": "发布时段影响",
+    "publishCalendar": "发布日历",
+    "publishCalendarHint": "每一格是一天；颜色越深，当天播放量最高的视频表现越好。点击有发布的日期查看详情。",
+    "publishDay_other": "{{date}} · {{count}} 支视频 · 最高播放 {{maxViews}}",
     "durationImpact": "视频时长影响",
+    "videoGrowth": "播放增长曲线",
+    "videoGrowthAxis": "按真实时间的播放量",
+    "videoGrowthSummary": "{{n}} 次统计快照",
+    "videoGrowthNeedsHistory": "目前只有一次快照。稍后再采集一次，才能量出增长。",
     "peak": "最高",
-    "densityLow": "少",
-    "densityHigh": "多",
+    "publishViewsLow": "低播放",
+    "publishViewsHigh": "高播放",
     "duration": {
       "0-1": "1 分内",
       "1-3": "1–3 分",
@@ -113,49 +125,43 @@
       "thu": "周四",
       "fri": "周五",
       "sat": "周六"
-    },
-    "wordcloud": {
-      "tag": "标签",
-      "source_label": "来源",
-      "content": "内容",
-      "interaction": "互动",
-      "user": "用户",
-      "comment": "评论",
-      "detail": "词语详情",
-      "frequency": "共出现",
-      "perVideo": "视频分布",
-      "contexts": "上下文片段",
-      "occurrences": "出现 {{count}} 次",
-      "uniqueUsers": "{{count}} 位唯一用户",
-      "inVideos": "出现在 {{count}} 个视频中",
-      "mode": {
-        "all": "全部",
-        "title": "标题",
-        "tag": "标签",
-        "subtitle": "字幕",
-        "danmaku": "弹幕",
-        "comment": "评论"
-      },
-      "source": {
-        "danmaku": "弹幕",
-        "comment": "评论",
-        "title": "标题",
-        "tag": "标签",
-        "subtitle": "字幕"
-      }
     }
+  },
+  "ranking": {
+    "creatorSection": "B站榜单",
+    "videoSection": "B站榜单成绩",
+    "current": "当前上榜",
+    "empty": "暂无上榜记录",
+    "kind": {
+      "popular": "全站排行榜",
+      "weekly": "每周必看"
+    }
+  },
+  "creatorStats": {
+    "title": "UP 主账号数据",
+    "updated": "账号数据更新于 {{time}}"
+  },
+  "accountGrowth": {
+    "title": "账号增长",
+    "followers": "粉丝量增长",
+    "views": "播放量增长",
+    "likes": "点赞量增长",
+    "viewsAndLikes": "播放量与点赞量增长",
+    "summary": "{{n}} 次账号数据快照",
+    "needsHistory": "目前只有一个账号快照，下一次刷新后会形成增长曲线。"
   },
   "video": {
     "sort": "排序",
     "openOnBilibili": "在 B 站打开",
     "openProof": "查看完整校样",
-    "backToDashboard": "返回稿件",
+    "backToDashboard": "返回 UP 主",
     "duration": "时长",
     "publishedAt": "发布",
+    "tags": "标签",
     "comparison": "本篇 vs 平均",
     "shape": "七项轮廓",
     "engagement": "增减",
-    "engagementTip": "以查询区间内所有视频的平均值为中线，右侧高于平均，左侧低于平均。",
+    "engagementTip": "以这位 UP 主作品库的平均值为中线，右侧高于平均，左侧低于平均。",
     "thisVideo": "本篇",
     "average": "平均",
     "viewsLabel": "播放",
@@ -168,10 +174,6 @@
     "orderAsc": "由低到高",
     "noCover": "无封面",
     "noMatch": "没有匹配的视频",
-    "hasDanmaku": "有弹幕",
-    "noDanmaku": "无弹幕",
-    "hasSubtitle": "有字幕",
-    "noSubtitle": "无字幕",
     "previous": "上一页",
     "next": "下一页",
     "pageOf": "第 {{page}} 页 / 共 {{total}} 页"
@@ -205,11 +207,13 @@
     "title": "设置",
     "bilibili": "Bilibili 连接",
     "sessdata": "SESSDATA",
-    "sessdataHelp": "从浏览器 Cookie 取得 SESSDATA。不填也能用，只是抓不到弹幕正文、评论与字幕。",
+    "sessdataHelp": "从浏览器 Cookie 取得 SESSDATA。抓取必须配置：没有登录状态时，Bilibili 会返回 HTTP 412。",
     "validateSessdata": "验证",
     "proxy": "代理",
     "proxyHelp": "HTTP 代理地址，每行一个。匿名请求会在这些代理之间轮询。",
     "proxyPlaceholder": "http://proxy1:8080\nhttp://proxy2:8080",
+    "refreshWindow": "快照窗口",
+    "refreshWindowHelp": "每次自动或手动更新统计时，只抓取最近 30–50 支视频。",
     "aiConfig": "AI 配置",
     "aiHelp": "任何 OpenAI 兼容接口皆可。未配置时 AI 分析不可用。",
     "baseUrl": "Base URL",
@@ -232,7 +236,7 @@
     "data": "数据",
     "dataHelp": "清除本机浏览器里保存的偏好设置，不影响服务器上的抓取数据。",
     "clearAll": "清除本机数据",
-    "clearConfirm": "将清除本机保存的主题、语言等偏好并重新载入页面。服务器上的查询数据不受影响。"
+    "clearConfirm": "将清除本机保存的主题、语言等偏好并重新载入页面。服务器上的 UP 主作品库不受影响。"
   },
   "common": {
     "loading": "上墨中……",
@@ -248,6 +252,8 @@
   "query": {
     "title": "发稿单",
     "subtitle": "指定一位 UP 主与一段时间，抓取该区间内的全部视频数据。",
+    "appendTitle": "追加抓取",
+    "appendSubtitle": "把新的时间段并入这位 UP 主已有的作品库；已在库中的视频不会重新抓取。",
     "uid": "UID",
     "uidHelp": "在 UP 主主页网址里，如 space.bilibili.com/546195 中的 546195。",
     "dateRange": "时间段",
@@ -259,8 +265,8 @@
     "goToSettings": "前往设置",
     "sessdataMissingTitle": "缺 SESSDATA",
     "sessdataInvalidTitle": "SESSDATA 已失效",
-    "sessdataWarning": "当前未配置 SESSDATA。仍可查询，但弹幕正文与字幕会缺失，相关词表和情感分析也会不完整。",
-    "sessdataInvalid": "SESSDATA 已失效，请重新配置。弹幕正文与字幕将无法获取。",
+    "sessdataWarning": "抓取必须配置 SESSDATA，请先在设置中填写。",
+    "sessdataInvalid": "SESSDATA 已失效，请重新配置后再开始查询。",
     "preset": {
       "7d": "7 天",
       "30d": "30 天",
@@ -269,55 +275,5 @@
       "1y": "1 年",
       "all": "全部"
     }
-  },
-  "demographics": {
-    "uniqueUsers": "{{n}} 位唯一用户",
-    "filtered": "{{n}} / {{total}} 位用户",
-    "total": "合计 {{n}}",
-    "vipRatio": "大会员",
-    "genderRatio": "性别",
-    "levelDistribution": "等级",
-    "locationDistribution": "地区",
-    "unknown": "未知",
-    "vip": {
-      "nonVip": "非大会员",
-      "monthly": "月度大会员",
-      "annual": "年度大会员"
-    },
-    "gender": {
-      "male": "男",
-      "female": "女",
-      "secret": "保密"
-    },
-    "clearFilter": "撤销",
-    "applyFilter": "确认筛选"
-  },
-  "sentiment": {
-    "distribution": "情感比例",
-    "trend": "情感走势",
-    "positive": "正面",
-    "neutral": "中性",
-    "negative": "负面",
-    "danmakuSentiment": "弹幕",
-    "commentSentiment": "评论",
-    "danmakuLabel": "弹幕",
-    "commentLabel": "评论",
-    "score": "分",
-    "avgScore": "平均",
-    "notAnalyzed": "这份稿件还没有做情感分析。",
-    "runAnalysis": "开始分析",
-    "analyzing": "情感分析中……",
-    "error": "情感分析失败",
-    "retry": "重试",
-    "reanalyze": "重新分析",
-    "dim": {
-      "gender": "性别",
-      "level": "等级",
-      "vip": "大会员",
-      "location": "地区"
-    },
-    "matrixNote": "横条是三种情感的占比，右侧数字是平均情感分（0—100）。",
-    "warmest": "说得最暖的词",
-    "coldest": "说得最冷的词"
   }
 }

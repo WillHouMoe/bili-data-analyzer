@@ -1,6 +1,10 @@
 services:
   app:
+    container_name: bilianalyzer
     build: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
     ports:
       # Bound to loopback only: the API has no authentication on any endpoint,
       # so publishing on all interfaces would expose it to the whole network.
@@ -11,3 +15,15 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///./data/bilianalyzer.db
     env_file:
       - .env
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s

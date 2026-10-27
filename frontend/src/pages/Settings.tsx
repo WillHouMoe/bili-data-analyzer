@@ -112,6 +112,7 @@ export default function Settings() {
   const [aiApiKey, setAiApiKey] = useState(MASK);
   const [aiModel, setAiModel] = useState("gpt-4o");
   const [proxyList, setProxyList] = useState("");
+  const [refreshWindowSize, setRefreshWindowSize] = useState(40);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -134,6 +135,7 @@ export default function Settings() {
         setAiApiKey(s.ai_api_key ? MASK : "");
         setAiModel(s.ai_model || "gpt-4o");
         setProxyList(s.proxy_list || "");
+        setRefreshWindowSize(s.refresh_window_size || 40);
       })
       .catch(() => {
         // Keep defaults; saving still works.
@@ -152,10 +154,11 @@ export default function Settings() {
     setSaved(false);
     setSaveError(null);
     try {
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | number> = {
         ai_base_url: aiBaseUrl,
         ai_model: aiModel,
         proxy_list: proxyList,
+        refresh_window_size: refreshWindowSize,
       };
       if (sessdata !== MASK) payload.sessdata = sessdata;
       if (aiApiKey !== MASK) payload.ai_api_key = aiApiKey;
@@ -257,6 +260,26 @@ export default function Settings() {
               rows={4}
               aria-label={t("settings.proxy")}
               className="w-full resize-y border border-rule-2 bg-transparent px-2.5 py-2 font-sans text-ui leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-3 focus-visible:border-mark focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-mark/40"
+            />
+          </SpecRow>
+
+          <SpecRow
+            label={t("settings.refreshWindow")}
+            help={t("settings.refreshWindowHelp")}
+          >
+            <Input
+              type="number"
+              min={30}
+              max={50}
+              value={refreshWindowSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                if (Number.isFinite(next)) {
+                  setRefreshWindowSize(Math.min(50, Math.max(30, next)));
+                }
+              }}
+              aria-label={t("settings.refreshWindow")}
+              className="w-28 tabular-nums"
             />
           </SpecRow>
 

@@ -16,6 +16,7 @@ import AIConversationView from "@/components/ai/AIConversationView";
 import AIMessageInput from "@/components/ai/AIMessageInput";
 
 interface AIPanelProps {
+  uid?: number;
   queryId?: number;
   bvid?: string;
   open: boolean;
@@ -34,7 +35,13 @@ const VIDEO_PRESETS: AIPreset[] = [
   { id: "video_analysis", labelKey: "ai.presets.videoAnalysis", descriptionKey: "ai.presets.videoAnalysisDesc", icon: "video" },
 ];
 
-export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelProps) {
+export default function AIPanel({
+  uid,
+  queryId,
+  bvid,
+  open,
+  onOpenChange,
+}: AIPanelProps) {
   const { t, i18n } = useTranslation();
   const [state, setState] = useState<PanelState>("presets");
   const [conversations, setConversations] = useState<AIConversation[]>([]);
@@ -53,14 +60,16 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
     try {
       const convs = bvid
         ? await api.getVideoAIConversations(bvid)
-        : queryId
+        : uid
+          ? await api.getCreatorAIConversations(uid)
+          : queryId
           ? await api.getAIConversations(queryId)
           : [];
       setConversations(convs);
     } catch {
       // The list keeps its last good state.
     }
-  }, [queryId, bvid]);
+  }, [uid, queryId, bvid]);
 
   useEffect(() => {
     if (!open) return;
@@ -177,7 +186,9 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
         try {
           const detail = bvid
             ? await api.getVideoAIConversation(bvid, cid)
-            : queryId ? await api.getAIConversation(queryId, cid) : null;
+            : uid
+              ? await api.getCreatorAIConversation(uid, cid)
+              : queryId ? await api.getAIConversation(queryId, cid) : null;
           if (detail) {
             setMessages(detail.messages);
             setStreamingContent("");
@@ -215,7 +226,9 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
 
     const url = bvid
       ? api.createVideoAIConversationUrl(bvid)
-      : queryId ? api.createAIConversationUrl(queryId) : null;
+      : uid
+        ? api.createCreatorAIConversationUrl(uid)
+        : queryId ? api.createAIConversationUrl(queryId) : null;
     if (!url) return;
 
     await readSSEStream(url, { preset: presetId });
@@ -232,7 +245,9 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
     try {
       const detail = bvid
         ? await api.getVideoAIConversation(bvid, convId)
-        : queryId ? await api.getAIConversation(queryId, convId) : null;
+        : uid
+          ? await api.getCreatorAIConversation(uid, convId)
+          : queryId ? await api.getAIConversation(queryId, convId) : null;
       if (detail) {
         setMessages(detail.messages);
       }
@@ -252,6 +267,8 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
     try {
       if (bvid) {
         await api.deleteVideoAIConversation(bvid, convId);
+      } else if (uid) {
+        await api.deleteCreatorAIConversation(uid, convId);
       } else if (queryId) {
         await api.deleteAIConversation(queryId, convId);
       }
@@ -276,7 +293,9 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
       // First message in free_chat — create conversation with content
       const url = bvid
         ? api.createVideoAIConversationUrl(bvid)
-        : queryId ? api.createAIConversationUrl(queryId) : null;
+        : uid
+          ? api.createCreatorAIConversationUrl(uid)
+          : queryId ? api.createAIConversationUrl(queryId) : null;
       if (!url) return;
 
       await readSSEStream(url, { preset: "free_chat", content });
@@ -285,7 +304,9 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
 
     const url = bvid
       ? api.sendVideoAIMessageUrl(bvid, currentConvId)
-      : queryId ? api.sendAIMessageUrl(queryId, currentConvId) : null;
+      : uid
+        ? api.sendCreatorAIMessageUrl(uid, currentConvId)
+        : queryId ? api.sendAIMessageUrl(queryId, currentConvId) : null;
     if (!url) return;
 
     await readSSEStream(url, { content });
@@ -307,7 +328,11 @@ export default function AIPanel({ queryId, bvid, open, onOpenChange }: AIPanelPr
             <SheetTitle>{t("ai.title")}</SheetTitle>
           </div>
           <SheetDescription>
-            {bvid ? bvid : queryId ? `${t("colophon.query")} #${queryId}` : ""}
+            {bvid
+              ? bvid
+              : uid
+                ? `${t("colophon.creator")} ${uid}`
+                : queryId ? `${t("colophon.query")} #${queryId}` : ""}
           </SheetDescription>
         </SheetHeader>
 

@@ -8,54 +8,87 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from app.api import ai, analytics, fetch, queries, sentiment, videos
+from app.api import ai, analytics, creators, fetch, queries, videos
 from app.api import settings as settings_api
+from app.core.background_tasks import track_task
 from app.core.config import settings
 from app.core.database import async_session, init_db
-from app.models import Query
+from app.models import Query, User
+from app.services.fetch_credentials import (
+    FetchCredentialError,
+    load_fetch_credentials,
+)
+from app.services.fetch_task import run_fetch
+from app.services.stats_refresh import stats_refresh_loop
 
 logger = logging.getLogger(__name__)
 
-# Statuses a query/sentiment run can be left in if the process dies mid-scrape.
-NON_TERMINAL_QUERY_STATUSES = ("pending", "fetching", "fetching_content")
-NON_TERMINAL_SENTIMENT_STATUSES = ("analyzing",)
+NON_TERMINAL_QUERY_STATUSES = ("pending", "fetching")
 
 
-async def _reset_interrupted_queries() -> None:
-    """A query stuck at fetching/fetching_content/analyzing when the process
-    restarts (e.g. a container redeploy mid-scrape) would otherwise show that
-    status forever, since nothing is left running to advance it."""
+async def _resume_interrupted_queries() -> None:
+    """Resume scrapes interrupted by a container restart.
+
+    The fetch loop skips videos already linked to the same query, so resuming is
+    safe after only part of an index has been persisted.
+    """
     async with async_session() as db:
         result = await db.execute(select(Query).where(Query.status.in_(NON_TERMINAL_QUERY_STATUSES)))
         stuck_queries = result.scalars().all()
         for query in stuck_queries:
-            query.status = "error"
-            query.error_message = "Interrupted by server restart"
-            query.progress = None
-
-        result = await db.execute(select(Query).where(Query.sentiment_status.in_(NON_TERMINAL_SENTIMENT_STATUSES)))
-        stuck_sentiment = result.scalars().all()
-        for query in stuck_sentiment:
-            query.sentiment_status = "error"
-            query.progress = None
-
-        if stuck_queries or stuck_sentiment:
+            query.status = "pending"
+            query.error_message = None
+            query.progress = "Queued to resume after server restart"
+        if stuck_queries:
             await db.commit()
-            logger.warning(
-                "Reset %d interrupted quer(ies) and %d interrupted sentiment run(s) on startup",
-                len(stuck_queries), len(stuck_sentiment),
+            logger.info("Resuming %d interrupted query task(s)", len(stuck_queries))
+
+        try:
+            sessdata, proxies = await load_fetch_credentials(db)
+        except FetchCredentialError:
+            sessdata, proxies = None, []
+
+    for query in stuck_queries:
+        track_task(
+            run_fetch(
+                query.id,
+                query.uid,
+                query.start_date,
+                query.end_date,
+                sessdata,
+                proxy_urls=proxies,
             )
+        )
+
+
+async def _reset_interrupted_refreshes() -> None:
+    async with async_session() as db:
+        users = (
+            await db.execute(
+                select(User).where(User.refresh_status.in_(("pending", "fetching")))
+            )
+        ).scalars().all()
+        for user in users:
+            user.refresh_status = "error"
+            user.refresh_progress = None
+            user.refresh_error = "Interrupted by server restart"
+        if users:
+            await db.commit()
+            logger.warning("Reset %d interrupted stats refresh(es)", len(users))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Path(settings.DATA_DIR).mkdir(parents=True, exist_ok=True)
     await init_db()
-    await _reset_interrupted_queries()
+    await _resume_interrupted_queries()
+    await _reset_interrupted_refreshes()
+    if settings.STATS_REFRESH_HOURS > 0:
+        track_task(stats_refresh_loop())
     yield
 
 
-app = FastAPI(title="BiliAnalyzer", lifespan=lifespan)
+app = FastAPI(title="BiliDataAnalyzer", lifespan=lifespan)
 
 # CORS
 if settings.CORS_ORIGINS:
@@ -77,12 +110,18 @@ if settings.CORS_ORIGINS:
 
 
 app.include_router(fetch.router, prefix="/api", tags=["fetch"])
+app.include_router(creators.router, prefix="/api", tags=["creators"])
 app.include_router(queries.router, prefix="/api", tags=["queries"])
 app.include_router(videos.router, prefix="/api", tags=["videos"])
 app.include_router(analytics.router, prefix="/api", tags=["analytics"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
 app.include_router(settings_api.router, prefix="/api", tags=["settings"])
-app.include_router(sentiment.router, prefix="/api", tags=["sentiment"])
+
+
+@app.get("/api/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+
 
 # Serve the built frontend, when there is one.
 #

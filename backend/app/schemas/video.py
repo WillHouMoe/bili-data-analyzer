@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import APIModel
 
 
-class VideoStatsSchema(BaseModel):
+class VideoStatsSchema(APIModel):
     views: int
     likes: int
     coins: int
@@ -14,7 +14,7 @@ class VideoStatsSchema(BaseModel):
     interaction_rate: float  # computed: (likes+coins+favorites+shares)/views*100
 
 
-class VideoSummary(BaseModel):
+class VideoSummary(APIModel):
     bvid: str
     title: str
     cover_url: str | None
@@ -24,15 +24,25 @@ class VideoSummary(BaseModel):
     stats: VideoStatsSchema
 
 
+class RankingMatch(APIModel):
+    kind: str
+    period: str
+    period_name: str | None
+    rank: int
+    bvid: str
+    title: str
+    views: int
+    likes: int
+    fetched_at: datetime
+    in_library: bool = False
+
+
 class VideoDetail(VideoSummary):
-    aid: int | None
-    cid: int | None
     description: str | None
-    has_danmaku: bool
-    has_subtitle: bool
+    rankings: list[RankingMatch]
 
 
-class PaginatedVideos(BaseModel):
+class PaginatedVideos(APIModel):
     items: list[VideoSummary]
     total: int
     page: int

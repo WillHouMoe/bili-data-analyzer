@@ -1,17 +1,22 @@
 {
   "app": {
-    "title": "BiliAnalyzer",
+    "title": "BiliDataAnalyzer",
     "tagline": "Channel data, typeset",
     "newQuery": "New query",
+    "addCreator": "Add creator",
+    "appendFetch": "Fetch another range",
+    "refreshStats": "Capture snapshot",
+    "refreshingStats": "Capturing…",
     "openIndex": "Open the index"
   },
   "sidebar": {
-    "queryHistory": "Index",
-    "emptyIndex": "Nothing on file yet. Start a query to fetch every video an uploader published over a span of time.",
+    "creatorIndex": "Creators",
+    "emptyIndex": "Nothing on file yet. Add a creator and fetch the videos they published over a span of time.",
     "summary": "{{videos}} videos · {{views}} views",
-    "deleteQuery": "Delete",
-    "deleteConfirmTitle": "Delete this run",
-    "deleteConfirmDesc": "The query for {{name}} and all of its fetched data will be permanently removed."
+    "deleteCreator": "Delete",
+    "deleteConfirmTitle": "Delete this creator",
+    "deleteConfirmDesc": "{{name}} and every fetched video and conversation in this creator library will be permanently removed.",
+    "deleteFailed": "Could not delete this creator. Check the server logs and try again."
   },
   "theme": {
     "light": "Light",
@@ -19,39 +24,35 @@
     "system": "System"
   },
   "masthead": {
-    "span": "Span",
-    "printRun": "Filtered: {{filters}}"
+    "span": "Span"
   },
   "section": {
     "performance": "Performance",
-    "audience": "Audience",
-    "words": "Words",
-    "sentiment": "Sentiment",
     "catalogue": "Catalogue"
   },
   "note": {
     "topTen": "top ten by this figure",
     "publishedOn": "published that day",
-    "inBand": "in this duration band",
-    "inSlot": "published in this slot"
+    "inBand": "in this duration band"
   },
   "colophon": {
     "query": "Run",
+    "creator": "Creator",
+    "fetches": "{{n}} fetch batches",
     "fetched": "Fetched"
   },
   "blank": {
     "title": "Blank sheet",
-    "note": "Pick a run from the index, or start a new query: an uploader's UID and a date span, and every video in it comes back with its views, interactions, danmaku and comments.",
+    "note": "Pick a creator from the index, or add one with a UID and a date span. Later fetches extend the same video library.",
     "loadingNote": "Inking."
   },
   "press": {
     "title": "Press run",
     "running": "Running",
+    "previousFetchFailed": "An earlier fetch failed, but the saved video library is still available.",
     "failedTitle": "This run never went to press",
     "stage": {
-      "index": "Video list and interaction figures",
-      "content": "Danmaku, comments and subtitles",
-      "sentiment": "Sentiment analysis"
+      "index": "Video list and interaction figures"
     },
     "state": {
       "done": "Done",
@@ -81,6 +82,11 @@
     "danmaku": "Danmaku",
     "comments": "Comments",
     "videos": "Videos",
+    "followers": "Followers",
+    "creatorViews": "Account views",
+    "creatorLikes": "Account likes",
+    "archiveCount": "All uploads",
+    "following": "Following",
     "interactionRate": "Interaction rate",
     "avgViews": "Avg views",
     "avgInteraction": "Avg interaction",
@@ -91,11 +97,18 @@
     "interaction": "Interaction comparison",
     "scatter": "Views vs interaction rate",
     "scatterFormula": "IR = (likes + coins + favorites + shares) / views × 100%",
-    "publishTimeHeatmap": "Publish time",
+    "publishCalendar": "Publishing calendar",
+    "publishCalendarHint": "Each square is one day. Darker squares mean the day's most-viewed upload performed better; select a publishing day to see its videos.",
+    "publishDay_one": "{{date}} · {{count}} video · {{maxViews}} peak views",
+    "publishDay_other": "{{date}} · {{count}} videos · {{maxViews}} peak views",
     "durationImpact": "Duration",
+    "videoGrowth": "View growth over time",
+    "videoGrowthAxis": "Views over real time",
+    "videoGrowthSummary": "{{n}} stats snapshots",
+    "videoGrowthNeedsHistory": "Only one snapshot exists. Capture another later to measure growth.",
     "peak": "Peak",
-    "densityLow": "low",
-    "densityHigh": "high",
+    "publishViewsLow": "Low views",
+    "publishViewsHigh": "High views",
     "duration": {
       "0-1": "<1 min",
       "1-3": "1–3 min",
@@ -113,49 +126,43 @@
       "thu": "Thu",
       "fri": "Fri",
       "sat": "Sat"
-    },
-    "wordcloud": {
-      "tag": "Tags",
-      "source_label": "Source",
-      "content": "Content",
-      "interaction": "Interaction",
-      "user": "Users",
-      "comment": "Comments",
-      "detail": "Word detail",
-      "frequency": "Total",
-      "perVideo": "Per video",
-      "contexts": "Contexts",
-      "occurrences": "{{count}} occurrences",
-      "uniqueUsers": "{{count}} unique users",
-      "inVideos": "found in {{count}} videos",
-      "mode": {
-        "all": "All",
-        "title": "Title",
-        "tag": "Tag",
-        "subtitle": "Subtitle",
-        "danmaku": "Danmaku",
-        "comment": "Comment"
-      },
-      "source": {
-        "danmaku": "Danmaku",
-        "comment": "Comment",
-        "title": "Title",
-        "tag": "Tag",
-        "subtitle": "Subtitle"
-      }
     }
+  },
+  "ranking": {
+    "creatorSection": "Bilibili recognition",
+    "videoSection": "Bilibili rankings",
+    "current": "Current placements",
+    "empty": "No ranking placements found",
+    "kind": {
+      "popular": "Site-wide ranking",
+      "weekly": "Weekly must-watch"
+    }
+  },
+  "creatorStats": {
+    "title": "Creator account",
+    "updated": "Account totals updated {{time}}"
+  },
+  "accountGrowth": {
+    "title": "Account growth",
+    "followers": "Followers",
+    "views": "Account views",
+    "likes": "Account likes",
+    "viewsAndLikes": "Views and likes",
+    "summary": "{{n}} account snapshots",
+    "needsHistory": "Only one account snapshot exists. The next refresh will extend both curves."
   },
   "video": {
     "sort": "Sort",
     "openOnBilibili": "Open on Bilibili",
     "openProof": "Open the full proof",
-    "backToDashboard": "Back to the run",
+    "backToDashboard": "Back to the creator",
     "duration": "Duration",
     "publishedAt": "Published",
+    "tags": "Tags",
     "comparison": "This video vs average",
     "shape": "Overall shape",
     "engagement": "Above and below",
-    "engagementTip": "The centre rule is the average across every video in the run; right is above it, left is below.",
+    "engagementTip": "The centre rule is the average across this creator's library; right is above it, left is below.",
     "thisVideo": "This video",
     "average": "Average",
     "viewsLabel": "views",
@@ -168,10 +175,6 @@
     "orderAsc": "Lowest first",
     "noCover": "No cover",
     "noMatch": "No videos match that search",
-    "hasDanmaku": "danmaku",
-    "noDanmaku": "no danmaku",
-    "hasSubtitle": "subtitles",
-    "noSubtitle": "no subtitles",
     "previous": "Previous",
     "next": "Next",
     "pageOf": "Page {{page}} of {{total}}"
@@ -205,11 +208,13 @@
     "title": "Settings",
     "bilibili": "Bilibili connection",
     "sessdata": "SESSDATA",
-    "sessdataHelp": "Copy SESSDATA from your browser cookies. Optional — without it, danmaku text, comments and subtitles cannot be fetched.",
+    "sessdataHelp": "Copy SESSDATA from your browser cookies. Required for scraping: Bilibili returns HTTP 412 to requests without a logged-in session.",
     "validateSessdata": "Validate",
     "proxy": "Proxies",
     "proxyHelp": "HTTP proxy addresses, one per line. Anonymous requests rotate across them.",
     "proxyPlaceholder": "http://proxy1:8080\nhttp://proxy2:8080",
+    "refreshWindow": "Snapshot window",
+    "refreshWindowHelp": "Refresh only the most recent 30–50 videos on each automatic or manual stats capture.",
     "aiConfig": "AI",
     "aiHelp": "Any OpenAI-compatible endpoint works. AI analysis is unavailable until this is set.",
     "baseUrl": "Base URL",
@@ -232,7 +237,7 @@
     "data": "Local data",
     "dataHelp": "Clears the preferences this browser has stored. Fetched data on the server is untouched.",
     "clearAll": "Clear local data",
-    "clearConfirm": "This clears the theme, language and other preferences stored in this browser and reloads the page. Your fetched runs stay on the server."
+    "clearConfirm": "This clears the theme, language and other preferences stored in this browser and reloads the page. Fetched creator libraries stay on the server."
   },
   "common": {
     "loading": "Inking…",
@@ -248,6 +253,8 @@
   "query": {
     "title": "Assignment",
     "subtitle": "Name an uploader and a span, and every video published in it comes back.",
+    "appendTitle": "Append a fetch",
+    "appendSubtitle": "Fetch another span into this creator's existing library. Videos already on file are reused.",
     "uid": "UID",
     "uidHelp": "The number in the uploader's URL, e.g. 546195 in space.bilibili.com/546195.",
     "dateRange": "Span",
@@ -259,8 +266,8 @@
     "goToSettings": "Open settings",
     "sessdataMissingTitle": "No SESSDATA",
     "sessdataInvalidTitle": "SESSDATA has expired",
-    "sessdataWarning": "SESSDATA is not configured. The query still runs, but danmaku text and subtitles will be missing, so the word tables and sentiment analysis will be incomplete.",
-    "sessdataInvalid": "SESSDATA has expired. Reconfigure it to fetch danmaku text and subtitles.",
+    "sessdataWarning": "SESSDATA is required for scraping. Configure it before starting a query.",
+    "sessdataInvalid": "SESSDATA has expired. Reconfigure it before starting a query.",
     "preset": {
       "7d": "7 days",
       "30d": "30 days",
@@ -269,55 +276,5 @@
       "1y": "1 year",
       "all": "All"
     }
-  },
-  "demographics": {
-    "uniqueUsers": "{{n}} unique users",
-    "filtered": "{{n}} of {{total}} users",
-    "total": "{{n}} total",
-    "vipRatio": "VIP",
-    "genderRatio": "Gender",
-    "levelDistribution": "Level",
-    "locationDistribution": "Location",
-    "unknown": "Unknown",
-    "vip": {
-      "nonVip": "Non-VIP",
-      "monthly": "Monthly VIP",
-      "annual": "Annual VIP"
-    },
-    "gender": {
-      "male": "Male",
-      "female": "Female",
-      "secret": "Undisclosed"
-    },
-    "clearFilter": "Clear",
-    "applyFilter": "Apply"
-  },
-  "sentiment": {
-    "distribution": "Sentiment split",
-    "trend": "Sentiment over time",
-    "positive": "Positive",
-    "neutral": "Neutral",
-    "negative": "Negative",
-    "danmakuSentiment": "Danmaku",
-    "commentSentiment": "Comments",
-    "danmakuLabel": "Danmaku",
-    "commentLabel": "Comments",
-    "score": "score",
-    "avgScore": "avg",
-    "notAnalyzed": "Sentiment has not been analyzed for this run.",
-    "runAnalysis": "Run analysis",
-    "analyzing": "Analyzing sentiment…",
-    "error": "Sentiment analysis failed",
-    "retry": "Retry",
-    "reanalyze": "Re-analyze",
-    "dim": {
-      "gender": "Gender",
-      "level": "Level",
-      "vip": "VIP",
-      "location": "Location"
-    },
-    "matrixNote": "The rule is split by share of sentiment; the figure at right is the average score (0–100).",
-    "warmest": "Warmest words",
-    "coldest": "Coldest words"
   }
 }

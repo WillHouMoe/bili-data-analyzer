@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+ensure_env() {
+  if [[ ! -f .env ]]; then
+    cp .env.example .env
+  fi
+}
+
+ensure_docker() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    open -a Docker >/dev/null 2>&1 || true
+  fi
+  for _ in {1..90}; do
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Docker did not become ready; run ./bilia logs" >&2
+  return 1
+}
+
+start() {
+  ensure_env
+  ensure_docker
+  docker compose up --build -d
+  resume_autostart
+}
+
+ensure_running() {
+  ensure_env
+  ensure_docker
+  docker compose up -d
+}
+
+pause_autostart() {
+  local agent="$HOME/Library/LaunchAgents/com.bilianalyzer.background.plist"
+  if [[ -f "$agent" ]]; then
+    launchctl bootout "gui/$(id -u)" "$agent" >/dev/null 2>&1 || true
+  fi
+}
+
+resume_autostart() {
+  local agent="$HOME/Library/LaunchAgents/com.bilianalyzer.background.plist"
+  if [[ -f "$agent" ]] &&
+    ! launchctl print "gui/$(id -u)/com.bilianalyzer.background" >/dev/null 2>&1; then
+    launchctl bootstrap "gui/$(id -u)" "$agent"
+  fi
+}
+
+wait_until_ready() {
+  for _ in {1..60}; do
+    if curl --fail --silent --show-error \
+      "http://127.0.0.1:8000/api/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "BiliDataAnalyzer did not become ready; run ./bilia logs" >&2
+  return 1
+}
+
+case "${1:-start}" in
+  start)
+    start
+    ;;
+  open)
+    ensure_running
+    wait_until_ready
+    open "http://127.0.0.1:8000"
+    ;;
+  status)
+    docker compose ps
+    ;;
+  logs)
+    docker compose logs -f app
+    ;;
+  restart)
+    start
+    ;;
+  stop)
+    pause_autostart
+    docker compose stop
+    ;;
+  down)
+    pause_autostart
+    docker compose down
+    ;;
+  install-login)
+    ensure_running
+    agent="$HOME/Library/LaunchAgents/com.bilianalyzer.background.plist"
+    helper_dir="$HOME/Library/Application Support/BiliAnalyzer"
+    helper="$helper_dir/start.sh"
+    docker_bin="$(command -v docker)"
+    mkdir -p "$(dirname "$agent")"
+    mkdir -p "$helper_dir"
+    cat >"$helper" <<EOF
+#!/bin/bash
+set -u
+DOCKER_BIN="$docker_bin"
+if ! "\$DOCKER_BIN" info >/dev/null 2>&1; then
+  /usr/bin/open -a Docker >/dev/null 2>&1 || true
+  for _ in {1..90}; do
+    if "\$DOCKER_BIN" info >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+fi
+if ! "\$DOCKER_BIN" inspect -f '{{.State.Running}}' bilianalyzer 2>/dev/null | grep -q true; then
+  "\$DOCKER_BIN" start bilianalyzer >/dev/null
+fi
+EOF
+    chmod +x "$helper"
+    cat >"$agent" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.bilianalyzer.background</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$helper</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/bilianalyzer-background.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/bilianalyzer-background.log</string>
+</dict>
+</plist>
+EOF
+    launchctl bootout "gui/$(id -u)" "$agent" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$agent"
+    echo "Installed login startup: $agent"
+    ;;
+  uninstall-login)
+    agent="$HOME/Library/LaunchAgents/com.bilianalyzer.background.plist"
+    helper_dir="$HOME/Library/Application Support/BiliAnalyzer"
+    launchctl bootout "gui/$(id -u)" "$agent" >/dev/null 2>&1 || true
+    rm -f "$agent"
+    rm -rf "$helper_dir"
+    echo "Removed login startup"
+    ;;
+  *)
+    echo "usage: ./bilia [start|open|status|logs|restart|stop|down|install-login|uninstall-login]" >&2
+    exit 2
+    ;;
+esac

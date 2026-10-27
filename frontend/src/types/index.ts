@@ -9,7 +9,41 @@ export interface QueryDetail extends QuerySummary {
   error_message: string | null;
   total_likes: number; total_coins: number; total_favorites: number;
   total_shares: number; total_danmaku: number; total_comments: number;
-  sentiment_status: string | null;
+}
+
+export interface CreatorSummary {
+  uid: number;
+  name: string;
+  avatar_url: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  video_count: number;
+  query_count: number;
+  total_views: number;
+  followers: number | null;
+  following: number | null;
+  creator_total_views: number | null;
+  creator_total_likes: number | null;
+  archive_count: number | null;
+  profile_stats_updated_at: string | null;
+  last_fetched_at: string | null;
+  last_stats_refresh_at: string | null;
+  refresh_status: string;
+  refresh_progress: string | null;
+  refresh_error: string | null;
+  status: string;
+  progress: string | null;
+  error_message: string | null;
+}
+
+export interface CreatorDetail extends CreatorSummary {
+  total_likes: number;
+  total_coins: number;
+  total_favorites: number;
+  total_shares: number;
+  total_danmaku: number;
+  total_comments: number;
+  rankings: RankingMatch[];
 }
 
 export interface VideoStats {
@@ -25,9 +59,21 @@ export interface VideoSummary {
 }
 
 export interface VideoDetail extends VideoSummary {
-  aid: number | null; cid: number | null;
   description: string | null;
-  has_danmaku: boolean; has_subtitle: boolean;
+  rankings: RankingMatch[];
+}
+
+export interface RankingMatch {
+  kind: "popular" | "weekly";
+  period: string;
+  period_name: string | null;
+  rank: number;
+  bvid: string;
+  title: string;
+  views: number;
+  likes: number;
+  fetched_at: string;
+  in_library: boolean;
 }
 
 export interface PaginatedVideos {
@@ -49,130 +95,63 @@ export interface VideoComparison {
   max_values: number[];
 }
 
-export interface DistributionItem {
-  name: string;
-  value: number;
+export interface GrowthPoint {
+  key: string;
+  min_days: number;
+  max_days: number | null;
+  median_views: number;
+  p25_views: number;
+  p75_views: number;
+  samples: number;
 }
 
-export interface UserDemographicsResponse {
-  total_unique_users: number;
-  uid_backed_users: number;
-  username_fallback_users: number;
-  vip_ratio: DistributionItem[];
-  gender_ratio: DistributionItem[];
-  level_distribution: DistributionItem[];
-  location_distribution: DistributionItem[];
-  users: UserRecord[];
+export interface GrowthTimelinePoint {
+  fetched_at: string;
+  median_views: number;
+  p25_views: number;
+  p75_views: number;
+  samples: number;
 }
 
-export interface UserRecord {
-  gender: string;
-  vip: string;
-  level: string;
-  location: string | null;
+export interface CreatorGrowth {
+  points: GrowthPoint[];
+  timeline: GrowthTimelinePoint[];
+  video_count: number;
+  observation_count: number;
+  videos_with_history: number;
+  first_snapshot_at: string | null;
+  last_snapshot_at: string | null;
 }
 
-export interface DemographicsFilter {
-  gender: string[];
-  vip: string[];
-  level: string[];
-  location: string[];
+export interface VideoGrowthPoint {
+  fetched_at: string;
+  views: number;
+  likes: number;
+  interaction_rate: number;
 }
 
-export function createEmptyFilter(): DemographicsFilter {
-  return { gender: [], vip: [], level: [], location: [] };
+export interface VideoGrowth {
+  bvid: string;
+  points: VideoGrowthPoint[];
 }
 
-export function isFilterEmpty(f: DemographicsFilter): boolean {
-  return f.gender.length === 0 && f.vip.length === 0 && f.level.length === 0 && f.location.length === 0;
+export interface AccountGrowthPoint {
+  fetched_at: string;
+  followers: number | null;
+  total_views: number | null;
+  total_likes: number | null;
+}
+
+export interface CreatorAccountGrowth {
+  uid: number;
+  points: AccountGrowthPoint[];
 }
 
 export interface SettingsResponse {
   sessdata: string; ai_base_url: string;
   ai_api_key: string; ai_model: string;
   proxy_list: string;
-}
-
-export interface WordFrequencyItem {
-  name: string;
-  value: number;
-}
-
-export interface WordFrequencyResponse {
-  words: WordFrequencyItem[];
-}
-
-export interface SnippetItem {
-  text: string;
-  user: string | null;
-  source: string | null; // "danmaku" | "comment" | "title" | "tag" | "subtitle" | null
-}
-
-export interface WordContextVideo {
-  bvid: string;
-  title: string;
-  count: number;
-  snippets: SnippetItem[];
-}
-
-export interface WordDetailResponse {
-  word: string;
-  total_count: number;
-  videos: WordContextVideo[];
-}
-
-// Sentiment Analysis Types
-
-export interface SentimentDistribution {
-  avg_score: number;
-  positive_pct: number;
-  neutral_pct: number;
-  negative_pct: number;
-  count: number;
-}
-
-export interface SentimentOverview {
-  status: string | null;
-  danmaku: SentimentDistribution | null;
-  comment: SentimentDistribution | null;
-}
-
-export interface SentimentTrendPoint {
-  date: string;
-  danmaku_avg: number | null;
-  comment_avg: number | null;
-  danmaku_positive_pct: number | null;
-  comment_positive_pct: number | null;
-}
-
-export interface SentimentWordItem {
-  name: string;
-  value: number;
-  avg_score: number;
-  label: string;
-}
-
-export interface DemographicSentimentCell {
-  dimension: string;
-  category: string;
-  avg_score: number;
-  positive_pct: number;
-  neutral_pct: number;
-  negative_pct: number;
-  count: number;
-}
-
-export interface SentimentContextItem {
-  text: string;
-  user: string | null;
-  score: number;
-  label: string;
-  source: string | null;
-}
-
-export interface SentimentContextResponse {
-  total_count: number;
-  items: SentimentContextItem[];
+  refresh_window_size: number;
 }
 
 // AI Conversation Types
@@ -211,6 +190,7 @@ export interface AIConversationDetail {
   id: number;
   preset: string;
   title: string | null;
+  uid: number | null;
   query_id: number | null;
   bvid: string | null;
   messages: AIMessageItem[];

@@ -1,10 +1,10 @@
-# AGENTS.md — biliAnalyzer
+# AGENTS.md — BiliDataAnalyzer
 
-Bilibili creator analytics: give it a UID + date range and it scrapes video stats,
-danmaku and comments, then serves an ECharts dashboard (word analysis, SnowNLP
-sentiment, audience clustering) plus an OpenAI-compatible tool-calling chat over
-the data. Single-machine, no auth — that is why it binds 127.0.0.1 and why
-SESSDATA is a hard requirement (anonymous calls get HTTP 412).
+Bilibili creator analytics: give it a UID + date range and it scrapes video
+metadata and aggregate stats, then serves an ECharts performance dashboard and
+an OpenAI-compatible tool-calling chat over that data. Single-machine, no auth
+— that is why it binds 127.0.0.1 and why SESSDATA is a hard requirement
+(anonymous calls get HTTP 412).
 
 ## Layout
 
@@ -20,11 +20,11 @@ SESSDATA is a hard requirement (anonymous calls get HTTP 412).
 
 - Backend: `ruff check .` then `pytest -q` (in `backend/`, dev extras: `pip install -e ".[dev]"`).
   Ruff selects `E4/E7/E9/F/I/UP` — it catches dead imports and undefined names, not style.
-- Frontend: `npx tsc --noEmit`, `npx eslint .`, `npm run build`. The frontend has no
-  test suite; when you fix a frontend bug, that is the moment to start one for that module.
-- The sentiment pipeline is a single implementation — `SnowNLPAnalyzer` in
-  `app/services/sentiment/snownlp_analyzer.py`. There is deliberately no analyzer
-  registry: one existed and nothing could ever select a different implementation.
+- Frontend: `npx tsc --noEmit`, `npx eslint .`, `npm test`, `npm run build`.
+  Add focused Vitest coverage when fixing frontend behaviour.
+- Comment, danmaku and subtitle text is intentionally out of scope. The
+  dashboard only consumes metadata and aggregate counts from video-stat payloads.
+- Word tables and word-frequency analysis are intentionally out of scope.
 
 ## Conventions
 

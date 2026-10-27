@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 import app.models  # noqa: F401
 from app.api.videos import list_videos
 from app.core.database import Base
+from app.main import app
 from app.models import Query, QueryVideo, User, Video, VideoStats
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -98,3 +99,7 @@ async def test_list_videos_search_filters_before_pagination_and_matches_multiple
     assert result.total == 1
     assert result.total_pages == 1
     assert [item.bvid for item in result.items] == [expected_bvid]
+def test_openapi_has_no_word_table_endpoints():
+    paths = app.openapi()["paths"]
+
+    assert not any("wordcloud" in path for path in paths)

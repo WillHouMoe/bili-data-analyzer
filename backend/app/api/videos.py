@@ -7,13 +7,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
-from app.models import QueryVideo, Video, VideoContent, VideoStats
+from app.models import QueryVideo, RankingEntry, Video, VideoStats
+from app.schemas.growth import VideoGrowth
 from app.schemas.video import (
     PaginatedVideos,
+    RankingMatch,
     VideoDetail,
     VideoStatsSchema,
     VideoSummary,
 )
+from app.services.growth import video_growth
 
 router = APIRouter()
 
@@ -125,15 +128,45 @@ async def get_video(bvid: str, db: AsyncSession = Depends(get_db)):
     if not stats:
         raise HTTPException(status_code=404, detail="No stats found")
 
-    content_result = await db.execute(select(VideoContent).where(VideoContent.bvid == bvid))
-    content = content_result.scalar_one_or_none()
+    ranking_rows = (
+        await db.execute(
+            select(RankingEntry)
+            .where(RankingEntry.bvid == bvid)
+            .order_by(RankingEntry.fetched_at.desc(), RankingEntry.rank)
+        )
+    ).scalars().all()
+    seen_kinds: set[str] = set()
+    rankings: list[RankingMatch] = []
+    for entry in ranking_rows:
+        if entry.kind in seen_kinds:
+            continue
+        seen_kinds.add(entry.kind)
+        rankings.append(
+            RankingMatch(
+                kind=entry.kind,
+                period=entry.period,
+                period_name=entry.period_name,
+                rank=entry.rank,
+                bvid=entry.bvid,
+                title=entry.title,
+                views=entry.views,
+                likes=entry.likes,
+                fetched_at=entry.fetched_at,
+                in_library=True,
+            )
+        )
 
     return VideoDetail(
-        bvid=video.bvid, aid=video.aid, cid=video.cid,
-        title=video.title, description=video.description,
+        bvid=video.bvid, title=video.title, description=video.description,
         cover_url=video.cover_url, duration=video.duration,
         published_at=video.published_at, tags=video.tags,
         stats=_stats_to_schema(stats),
-        has_danmaku=bool(content and content.danmakus and content.danmakus != "[]"),
-        has_subtitle=bool(content and content.subtitle),
+        rankings=rankings,
     )
+
+
+@router.get("/videos/{bvid}/stats/growth", response_model=VideoGrowth)
+async def get_video_growth(bvid: str, db: AsyncSession = Depends(get_db)):
+    if not await db.get(Video, bvid):
+        raise HTTPException(status_code=404, detail="Video not found")
+    return await video_growth(db, bvid)

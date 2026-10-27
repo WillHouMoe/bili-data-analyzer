@@ -8,6 +8,7 @@ class AIConversation(Base):
     __tablename__ = "ai_conversations"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    uid = Column(Integer, nullable=True)
     query_id = Column(Integer, ForeignKey("queries.id", ondelete="CASCADE"), nullable=True)
     bvid = Column(Text, ForeignKey("videos.bvid", ondelete="CASCADE"), nullable=True)
     preset = Column(Text, nullable=False)

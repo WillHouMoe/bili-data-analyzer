@@ -29,13 +29,13 @@ const PAGE_SIZE = 10;
 function VideoEntry({
   video,
   index,
-  queryId,
+  creatorId,
   expanded,
   onToggle,
 }: {
   video: VideoSummary;
   index: number;
-  queryId: number;
+  creatorId: number;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -135,14 +135,14 @@ function VideoEntry({
 
           {tags.length > 5 && (
             <p className="mt-3 text-note leading-relaxed text-ink-2">
-              <span className="column-label mr-2">{t("chart.wordcloud.tag")}</span>
+              <span className="column-label mr-2">{t("video.tags")}</span>
               {tags.join("、")}
             </p>
           )}
 
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
             <Link
-              to={`/video/${video.bvid}?query=${queryId}`}
+              to={`/video/${video.bvid}?uid=${creatorId}`}
               className="text-note font-medium text-mark underline decoration-mark/40 underline-offset-[0.22em] hover:decoration-mark"
             >
               {t("video.openProof")}
@@ -164,7 +164,7 @@ function VideoEntry({
   );
 }
 
-export default function VideoList({ queryId }: { queryId: number }) {
+export default function VideoList({ creatorId }: { creatorId: number }) {
   const { t } = useTranslation();
   const [result, setResult] = useState<PaginatedVideos | null>(null);
   const [resolvedKey, setResolvedKey] = useState("");
@@ -180,12 +180,12 @@ export default function VideoList({ queryId }: { queryId: number }) {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
-  const requestKey = `${queryId}:${sortBy}:${order}:${page}:${search}`;
+  const requestKey = `${creatorId}:${sortBy}:${order}:${page}:${search}`;
 
   useEffect(() => {
     let active = true;
     api
-      .getVideos(queryId, {
+      .getCreatorVideos(creatorId, {
         sort_by: sortBy,
         order,
         page: String(page),
@@ -203,7 +203,7 @@ export default function VideoList({ queryId }: { queryId: number }) {
         setResolvedKey(requestKey);
       });
     return () => { active = false; };
-  }, [queryId, requestKey, page, search, sortBy, order]);
+  }, [creatorId, requestKey, page, search, sortBy, order]);
 
   const sortOptions: { value: SortField; label: string }[] = [
     { value: "views", label: t("stats.totalViews") },
@@ -272,7 +272,7 @@ export default function VideoList({ queryId }: { queryId: number }) {
               key={v.bvid}
               video={v}
               index={startIndex + i + 1}
-              queryId={queryId}
+              creatorId={creatorId}
               expanded={expanded === v.bvid}
               onToggle={() => setExpanded((cur) => (cur === v.bvid ? null : v.bvid))}
             />

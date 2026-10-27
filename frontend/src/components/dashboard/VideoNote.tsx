@@ -23,7 +23,7 @@ export default function VideoNote({
   meta,
   rows,
   loading = false,
-  queryId,
+  creatorId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,7 +31,7 @@ export default function VideoNote({
   meta?: string;
   rows: VideoNoteRow[];
   loading?: boolean;
-  queryId: number;
+  creatorId: number;
 }) {
   const { t, i18n } = useTranslation();
 
@@ -55,7 +55,7 @@ export default function VideoNote({
                   {i + 1}
                 </span>
                 <Link
-                  to={`/video/${video.bvid}?query=${queryId}`}
+                  to={`/video/${video.bvid}?uid=${creatorId}`}
                   className="min-w-0 flex-1 font-song text-ui leading-snug font-semibold text-ink no-underline hover:text-mark"
                 >
                   {video.title}

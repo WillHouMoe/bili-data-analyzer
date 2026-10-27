@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ExternalLinkIcon } from "lucide-react";
-import { SEP, formatDuration } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
 import type { VideoDetail } from "@/types";
 
 /** 稿件頭：封面、提要、標籤 —— 一則稿子的來源說明。 */
@@ -37,7 +37,7 @@ export default function VideoHeader({ video }: { video: VideoDetail }) {
 
         {tags.length > 0 && (
           <p className="text-note leading-relaxed text-ink-3">
-            <span className="column-label mr-2">{t("chart.wordcloud.tag")}</span>
+            <span className="column-label mr-2">{t("video.tags")}</span>
             {tags.join("、")}
           </p>
         )}
@@ -52,11 +52,6 @@ export default function VideoHeader({ video }: { video: VideoDetail }) {
             {t("video.openOnBilibili")}
             <ExternalLinkIcon className="size-3" />
           </a>
-          <span className="colophon">
-            {video.has_danmaku ? t("video.hasDanmaku") : t("video.noDanmaku")}
-            {SEP}
-            {video.has_subtitle ? t("video.hasSubtitle") : t("video.noSubtitle")}
-          </span>
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 import { Emphasis } from "@/components/proof/Sheet";
 import { formatCount, daysBetween } from "@/lib/format";
-import type { QueryDetail, StatsSummary, VideoSummary } from "@/types";
+import type { CreatorDetail, StatsSummary, VideoSummary } from "@/types";
 
 /**
  * 導言 —— one paragraph that stands on its own: the span, the video that broke
@@ -15,7 +15,7 @@ export default function Lede({
   stats,
   videos,
 }: {
-  detail: QueryDetail;
+  detail: CreatorDetail;
   stats: StatsSummary;
   videos: VideoSummary[];
 }) {
@@ -28,7 +28,10 @@ export default function Lede({
     const count = stats.video_count;
     if (count <= 0) return null;
 
-    const days = daysBetween(detail.start_date, detail.end_date);
+    const days =
+      detail.start_date && detail.end_date
+        ? daysBetween(detail.start_date, detail.end_date)
+        : null;
     const avgViews = stats.total_views / count;
     const peak = videos.length
       ? videos.reduce((best, v) => (v.stats.views > best.stats.views ? v : best), videos[0])
@@ -78,7 +81,7 @@ export default function Lede({
             e: <Emphasis />,
             a: (
               <Link
-                to={`/video/${facts.peak.bvid}?query=${detail.id}`}
+                to={`/video/${facts.peak.bvid}?uid=${detail.uid}`}
                 className="font-medium text-ink underline decoration-rule-2 hover:text-mark hover:decoration-mark"
               />
             ),

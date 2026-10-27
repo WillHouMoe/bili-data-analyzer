@@ -1,9 +1,11 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
+
+from app.schemas.base import APIModel
 
 
-class FetchRequest(BaseModel):
+class FetchRequest(APIModel):
     uid: int = Field(gt=0)
     start_date: date
     end_date: date
@@ -15,12 +17,13 @@ class FetchRequest(BaseModel):
         return self
 
 
-class FetchResponse(BaseModel):
+class FetchResponse(APIModel):
     query_id: int
+    uid: int
     status: str
 
 
-class QuerySummary(BaseModel):
+class QuerySummary(APIModel):
     id: int
     uid: int
     user_name: str | None
@@ -41,4 +44,3 @@ class QueryDetail(QuerySummary):
     total_shares: int
     total_danmaku: int
     total_comments: int
-    sentiment_status: str | None = None

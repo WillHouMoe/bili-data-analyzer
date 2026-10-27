@@ -1,4 +1,4 @@
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -20,44 +20,67 @@ def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
     cursor.close()
 
 
-async def _ensure_video_content_uniqueness(conn: AsyncSession):
-    tables = await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='video_content'"))
-    if tables.first() is None:
-        return
-    indexes = await conn.execute(text("PRAGMA index_list('video_content')"))
-    if any(row[2] for row in indexes.fetchall()):
-        return
-    await conn.execute(text("""
-        DELETE FROM video_content
-        WHERE id IN (
-            SELECT older.id
-            FROM video_content AS older
-            JOIN video_content AS newer
-              ON older.bvid = newer.bvid
-             AND (
-                 COALESCE(older.fetched_at, '') < COALESCE(newer.fetched_at, '')
-                 OR (
-                     COALESCE(older.fetched_at, '') = COALESCE(newer.fetched_at, '')
-                     AND older.id < newer.id
-                 )
-             )
-        )
-    """))
-    await conn.execute(text(
-        "CREATE UNIQUE INDEX IF NOT EXISTS ux_video_content_bvid ON video_content (bvid)"
-    ))
-
-
-async def _ensure_sentiment_status_column(conn: AsyncSession):
-    """Add sentiment_status column to queries table if missing."""
-    cols = await conn.execute(text("PRAGMA table_info('queries')"))
-    col_names = {row[1] for row in cols.fetchall()}
-    if "sentiment_status" not in col_names:
-        await conn.execute(text("ALTER TABLE queries ADD COLUMN sentiment_status TEXT"))
-
-
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await _ensure_video_content_uniqueness(conn)
-        await _ensure_sentiment_status_column(conn)
+        # The simplify migration removed these models, but create_all() never
+        # dropped their tables. Their foreign keys still block deleting videos
+        # from databases created before that migration.
+        await conn.execute(text("DROP TABLE IF EXISTS video_content"))
+        await conn.execute(text("DROP TABLE IF EXISTS video_sentiment"))
+        # create_all() does not alter tables in an existing single-machine DB.
+        # This one additive migration keeps existing creator conversations
+        # usable after the UI changed from query-scoped to UID-scoped data.
+        columns = await conn.run_sync(
+            lambda sync_conn: {
+                column["name"]
+                for column in inspect(sync_conn).get_columns("ai_conversations")
+            }
+        )
+        if "uid" not in columns:
+            await conn.execute(
+                text("ALTER TABLE ai_conversations ADD COLUMN uid INTEGER")
+            )
+        user_columns = await conn.run_sync(
+            lambda sync_conn: {
+                column["name"]
+                for column in inspect(sync_conn).get_columns("users")
+            }
+        )
+        user_migrations = {
+            "followers": "INTEGER",
+            "following": "INTEGER",
+            "creator_total_views": "INTEGER",
+            "creator_total_likes": "INTEGER",
+            "archive_count": "INTEGER",
+            "profile_stats_updated_at": "DATETIME",
+            "last_stats_refresh_at": "DATETIME",
+            "refresh_status": "TEXT DEFAULT 'idle'",
+            "refresh_progress": "TEXT",
+            "refresh_error": "TEXT",
+            "refresh_retry_at": "DATETIME",
+        }
+        for column, sql_type in user_migrations.items():
+            if column not in user_columns:
+                await conn.execute(
+                    text(f"ALTER TABLE users ADD COLUMN {column} {sql_type}")
+                )
+        # Seed one account-history point for existing installs from their
+        # current profile totals. Future refreshes append real observations.
+        await conn.execute(
+            text(
+                """
+                INSERT INTO creator_stats_snapshots
+                    (uid, followers, following, total_views, total_likes,
+                     archive_count, fetched_at)
+                SELECT u.uid, u.followers, u.following, u.creator_total_views,
+                       u.creator_total_likes, u.archive_count,
+                       COALESCE(u.profile_stats_updated_at, u.last_fetched_at)
+                FROM users u
+                WHERE u.profile_stats_updated_at IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM creator_stats_snapshots s WHERE s.uid = u.uid
+                  )
+                """
+            )
+        )

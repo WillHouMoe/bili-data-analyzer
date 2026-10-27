@@ -12,10 +12,10 @@ import type { InteractionData } from "@/types";
  * unit and a scale, so hue would only add noise; pointing at one marks it.
  */
 export default function InteractionChart({
-  queryId,
+  creatorId,
   height = 236,
 }: {
-  queryId: number;
+  creatorId: number;
   height?: number;
 }) {
   const { t, i18n } = useTranslation();
@@ -26,12 +26,12 @@ export default function InteractionChart({
   useEffect(() => {
     let active = true;
     api
-      .getInteraction(queryId)
+      .getCreatorInteraction(creatorId)
       .then((d) => { if (active) setData(d); })
       .catch(() => { if (active) setData(null); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [queryId]);
+  }, [creatorId]);
 
   const rows = useMemo(
     () =>

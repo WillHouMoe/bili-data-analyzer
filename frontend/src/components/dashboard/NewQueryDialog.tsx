@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import { api } from "@/lib/api";
 interface NewQueryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultUid?: string;
 }
 
 type Preset = "7d" | "30d" | "3m" | "6m" | "1y" | "all";
@@ -44,8 +46,13 @@ const dateFieldClass =
   "h-8 w-full border border-rule-2 bg-transparent px-2.5 py-1 font-sans text-ui tabular-nums text-ink outline-none transition-colors focus-visible:border-mark focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-mark/40 max-sm:h-10";
 
 /** 發稿單 —— what to fetch, over which span, and whether the press can read the text. */
-export default function NewQueryDialog({ open, onOpenChange }: NewQueryDialogProps) {
+export default function NewQueryDialog({
+  open,
+  onOpenChange,
+  defaultUid,
+}: NewQueryDialogProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [uid, setUid] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -76,6 +83,10 @@ export default function NewQueryDialog({ open, onOpenChange }: NewQueryDialogPro
     return () => { ignore = true; };
   }, [open]);
 
+  useEffect(() => {
+    if (open && defaultUid) setUid(defaultUid);
+  }, [open, defaultUid]);
+
   function reset() {
     setUid("");
     setStartDate("");
@@ -105,8 +116,11 @@ export default function NewQueryDialog({ open, onOpenChange }: NewQueryDialogPro
     setSubmitting(true);
     setError(null);
     try {
-      await api.fetch(Number(uid), startDate, endDate);
+      const result = await api.fetch(Number(uid), startDate, endDate);
       close(false);
+      navigate(`/dashboard/${result.uid}`, {
+        state: { fetchStartedAt: Date.now() },
+      });
     } catch {
       setError(t("query.fetchFailed"));
     } finally {
@@ -118,8 +132,12 @@ export default function NewQueryDialog({ open, onOpenChange }: NewQueryDialogPro
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("query.title")}</DialogTitle>
-          <DialogDescription>{t("query.subtitle")}</DialogDescription>
+          <DialogTitle>
+            {defaultUid ? t("query.appendTitle") : t("query.title")}
+          </DialogTitle>
+          <DialogDescription>
+            {defaultUid ? t("query.appendSubtitle") : t("query.subtitle")}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -148,6 +166,7 @@ export default function NewQueryDialog({ open, onOpenChange }: NewQueryDialogPro
               inputMode="numeric"
               placeholder="546195"
               value={uid}
+              readOnly={Boolean(defaultUid)}
               onChange={(e) => setUid(e.target.value)}
             />
             <p className="text-colophon leading-relaxed tracking-normal text-ink-3">

@@ -1,17 +1,6 @@
-import type { QuerySummary, QueryDetail, VideoDetail, PaginatedVideos, StatsSummary, TrendPoint, InteractionData, VideoComparison, SettingsResponse, WordFrequencyResponse, WordDetailResponse, UserDemographicsResponse, DemographicsFilter, SentimentOverview, SentimentTrendPoint, SentimentWordItem, DemographicSentimentCell, SentimentContextResponse, AIConversation, AIConversationDetail } from "@/types";
+import type { CreatorDetail, CreatorSummary, CreatorGrowth, CreatorAccountGrowth, VideoGrowth, QuerySummary, QueryDetail, VideoDetail, PaginatedVideos, StatsSummary, TrendPoint, InteractionData, VideoComparison, SettingsResponse, AIConversation, AIConversationDetail } from "@/types";
 
 const BASE = import.meta.env.VITE_API_BASE || "/api";
-
-function buildFilterParams(filter?: DemographicsFilter, prefix: "?" | "&" = "?"): string {
-  if (!filter) return "";
-  const params = new URLSearchParams();
-  if (filter.gender.length) params.set("gender", filter.gender.join(","));
-  if (filter.vip.length) params.set("vip", filter.vip.join(","));
-  if (filter.level.length) params.set("level", filter.level.join(","));
-  if (filter.location.length) params.set("location", filter.location.join(","));
-  const qs = params.toString();
-  return qs ? `${prefix}${qs}` : "";
-}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(`${BASE}${path}`, {
@@ -24,9 +13,32 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   fetch: (uid: number, start_date: string, end_date: string) =>
-    request<{ query_id: number; status: string }>("/fetch", {
+    request<{ query_id: number; uid: number; status: string }>("/fetch", {
       method: "POST", body: JSON.stringify({ uid, start_date, end_date }),
     }),
+  getCreators: () => request<CreatorSummary[]>("/creators"),
+  getCreator: (uid: number) => request<CreatorDetail>(`/creators/${uid}`),
+  deleteCreator: (uid: number) => request(`/creators/${uid}`, { method: "DELETE" }),
+  getCreatorVideos: (uid: number, params: Record<string, string>) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<PaginatedVideos>(`/creators/${uid}/videos?${qs}`);
+  },
+  getCreatorStatsSummary: (uid: number) =>
+    request<StatsSummary>(`/creators/${uid}/stats/summary`),
+  getCreatorTrend: (uid: number) =>
+    request<TrendPoint[]>(`/creators/${uid}/stats/trend`),
+  getCreatorInteraction: (uid: number) =>
+    request<InteractionData>(`/creators/${uid}/stats/interaction`),
+  getCreatorGrowth: (uid: number) =>
+    request<CreatorGrowth>(`/creators/${uid}/stats/growth`),
+  getCreatorAccountGrowth: (uid: number) =>
+    request<CreatorAccountGrowth>(`/creators/${uid}/stats/account-growth`),
+  refreshCreatorStats: (uid: number) =>
+    request<{ status: string }>(`/creators/${uid}/stats/refresh`, {
+      method: "POST",
+    }),
+  getCreatorComparison: (uid: number, bvid: string) =>
+    request<VideoComparison>(`/creators/${uid}/videos/${bvid}/comparison`),
   getQueries: () => request<QuerySummary[]>("/queries"),
   getQuery: (id: number) => request<QueryDetail>(`/queries/${id}`),
   deleteQuery: (id: number) => request(`/queries/${id}`, { method: "DELETE" }),
@@ -35,15 +47,13 @@ export const api = {
     return request<PaginatedVideos>(`/queries/${queryId}/videos?${qs}`);
   },
   getVideo: (bvid: string) => request<VideoDetail>(`/videos/${bvid}`),
+  getVideoGrowth: (bvid: string) =>
+    request<VideoGrowth>(`/videos/${bvid}/stats/growth`),
   getStatsSummary: (queryId: number) => request<StatsSummary>(`/queries/${queryId}/stats/summary`),
   getTrend: (queryId: number) => request<TrendPoint[]>(`/queries/${queryId}/stats/trend`),
   getInteraction: (queryId: number) => request<InteractionData>(`/queries/${queryId}/stats/interaction`),
-  getQueryDemographics: (queryId: number) =>
-    request<UserDemographicsResponse>(`/queries/${queryId}/stats/demographics`),
   getComparison: (bvid: string, queryId: number) =>
     request<VideoComparison>(`/videos/${bvid}/stats/comparison?query_id=${queryId}`),
-  getVideoDemographics: (bvid: string) =>
-    request<UserDemographicsResponse>(`/videos/${bvid}/stats/demographics`),
   getSettings: () => request<SettingsResponse>("/settings"),
   updateSettings: (data: Partial<SettingsResponse>) =>
     request<SettingsResponse>("/settings", { method: "PUT", body: JSON.stringify(data) }),
@@ -57,14 +67,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  getWordFrequency: (queryId: number, type: string, filter?: DemographicsFilter) =>
-    request<WordFrequencyResponse>(`/queries/${queryId}/wordcloud/${type}${buildFilterParams(filter)}`),
-  getVideoWordFrequency: (bvid: string, type: string, filter?: DemographicsFilter) =>
-    request<WordFrequencyResponse>(`/videos/${bvid}/wordcloud/${type}${buildFilterParams(filter)}`),
-  getWordDetail: (queryId: number, type: string, word: string, filter?: DemographicsFilter) =>
-    request<WordDetailResponse>(`/queries/${queryId}/wordcloud/${type}/detail?word=${encodeURIComponent(word)}${buildFilterParams(filter, "&")}`),
-  getVideoWordDetail: (bvid: string, type: string, word: string, filter?: DemographicsFilter) =>
-    request<WordDetailResponse>(`/videos/${bvid}/wordcloud/${type}/detail?word=${encodeURIComponent(word)}${buildFilterParams(filter, "&")}`),
   aiAnalyzeUrl: (queryId: number) => `${BASE}/queries/${queryId}/ai/analyze`,
 
   // AI Conversations — query-scoped
@@ -79,6 +81,18 @@ export const api = {
   sendAIMessageUrl: (queryId: number, convId: number) =>
     `${BASE}/queries/${queryId}/ai/conversations/${convId}/messages`,
 
+  // AI Conversations — creator-scoped
+  getCreatorAIConversations: (uid: number) =>
+    request<AIConversation[]>(`/creators/${uid}/ai/conversations`),
+  getCreatorAIConversation: (uid: number, convId: number) =>
+    request<AIConversationDetail>(`/creators/${uid}/ai/conversations/${convId}`),
+  deleteCreatorAIConversation: (uid: number, convId: number) =>
+    request(`/creators/${uid}/ai/conversations/${convId}`, { method: "DELETE" }),
+  createCreatorAIConversationUrl: (uid: number) =>
+    `${BASE}/creators/${uid}/ai/conversations`,
+  sendCreatorAIMessageUrl: (uid: number, convId: number) =>
+    `${BASE}/creators/${uid}/ai/conversations/${convId}/messages`,
+
   // AI Conversations — video-scoped
   getVideoAIConversations: (bvid: string) =>
     request<AIConversation[]>(`/videos/${bvid}/ai/conversations`),
@@ -91,33 +105,4 @@ export const api = {
   sendVideoAIMessageUrl: (bvid: string, convId: number) =>
     `${BASE}/videos/${bvid}/ai/conversations/${convId}/messages`,
 
-  // Sentiment analysis
-  getSentimentOverview: (queryId: number) =>
-    request<SentimentOverview>(`/queries/${queryId}/sentiment/overview`),
-  getSentimentTrend: (queryId: number) =>
-    request<SentimentTrendPoint[]>(`/queries/${queryId}/sentiment/trend`),
-  getSentimentWordcloud: (queryId: number, source: string, limit = 100) =>
-    request<SentimentWordItem[]>(`/queries/${queryId}/sentiment/wordcloud/${source}?limit=${limit}`),
-  getSentimentDemographics: (queryId: number) =>
-    request<DemographicSentimentCell[]>(`/queries/${queryId}/sentiment/demographics`),
-  triggerSentimentAnalysis: (queryId: number, force = false) =>
-    request<{ status: string; message: string }>(`/queries/${queryId}/sentiment/analyze?force=${force}`, { method: "POST" }),
-
-  // Video-level sentiment
-  getVideoSentimentOverview: (bvid: string) =>
-    request<SentimentOverview>(`/videos/${bvid}/sentiment/overview`),
-  getVideoSentimentWordcloud: (bvid: string, source: string, limit = 100) =>
-    request<SentimentWordItem[]>(`/videos/${bvid}/sentiment/wordcloud/${source}?limit=${limit}`),
-  getVideoSentimentDemographics: (bvid: string) =>
-    request<DemographicSentimentCell[]>(`/videos/${bvid}/sentiment/demographics`),
-
-  // Sentiment contexts
-  getSentimentContexts: (queryId: number, params: Record<string, string>) => {
-    const qs = new URLSearchParams(params).toString();
-    return request<SentimentContextResponse>(`/queries/${queryId}/sentiment/contexts?${qs}`);
-  },
-  getVideoSentimentContexts: (bvid: string, params: Record<string, string>) => {
-    const qs = new URLSearchParams(params).toString();
-    return request<SentimentContextResponse>(`/videos/${bvid}/sentiment/contexts?${qs}`);
-  },
 };

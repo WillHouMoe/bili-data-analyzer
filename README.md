@@ -1,30 +1,31 @@
-# BiliAnalyzer
+# BiliDataAnalyzer
 
-A dashboard for reading a Bilibili creator's numbers: what they posted in a
-window of time, how it performed, what the audience said about it, and what an
-LLM makes of all three.
+A dashboard for reading a Bilibili creator's video performance: what they
+posted in a window of time, how it performed, and what an LLM makes of those
+numbers.
 
 <p>
-  <a href="https://github.com/1morr/biliAnalyzer/actions/workflows/ci.yml"><img src="https://github.com/1morr/biliAnalyzer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/1morr/biliAnalyzer" alt="License: MIT"></a>
+  <a href="https://github.com/WillHouMoe/bili-data-analyzer/actions/workflows/ci.yml"><img src="https://github.com/WillHouMoe/bili-data-analyzer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/WillHouMoe/bili-data-analyzer" alt="License: MIT"></a>
 </p>
 
 **English** · [繁體中文](README.zh-Hant.md)
 
 Bilibili's creator centre shows totals and trend lines for your own account
-only, and nowhere on the site are comments or danmaku ever counted — they can
-only be read one video at a time. BiliAnalyzer answers the questions those
-pages cannot: what a creator's last few months actually looked like, which
-words and topics the audience responded to, whether the tone shifted, and how
-each audience segment behaved. It takes any public UID, so it works for a
-creator reviewing their own run, a fan or analyst studying someone else's, or
-anyone comparing two.
+only. BiliDataAnalyzer answers broader questions across a creator's recent
+catalogue: which uploads performed best, how publishing cadence and duration
+relate to attention, and how interactions accumulate over time. It takes any
+public UID, so it works for a creator reviewing their own run, a fan or analyst
+studying someone else's, or anyone comparing two.
 
 Give it a UID and a date range. It fetches every video the creator posted in
-that window, then charts the performance, tokenizes the titles, tags, subtitles,
-danmaku and comments into drillable word tables, scores sentiment, and crosses
-all of it against audience segments. An OpenAI-compatible endpoint can then be
-asked questions about the result, with tool calls against the same data.
+that window and charts the performance. An OpenAI-compatible endpoint can then
+be asked questions about the result, with tool calls against the same metadata
+and aggregate stats.
+
+Comment, danmaku and subtitle text is deliberately out of scope. The app keeps
+the aggregate comment and danmaku counts supplied by Bilibili's video-stat
+payload, but it never fetches or stores the underlying text.
 
 ![Dashboard](docs/images/dashboard.png)
 
@@ -33,15 +34,27 @@ asked questions about the result, with tool calls against the same data.
 Requires Docker and Docker Compose.
 
 ```bash
-git clone https://github.com/1morr/biliAnalyzer.git
-cd biliAnalyzer
-cp .env.example .env          # required — compose will not start without it
-docker compose up --build -d
+git clone https://github.com/WillHouMoe/bili-data-analyzer.git
+cd bili-data-analyzer
+./bilia start
 ```
 
-Then open **<http://localhost:8000>**. The API docs are at `/docs` on the same
-port; the built frontend is served by the same process, so there is no separate
-web port.
+That starts the app in the background and creates `.env` from the example on
+the first run. Open it later with `./bilia open`; `./bilia status` and
+`./bilia logs` are there when you need them. The API docs live at `/docs` on the
+same port as the UI.
+
+On macOS, run `./bilia install-login` once to start Docker and the analyzer at
+login. The LaunchAgent also checks every five minutes and restarts the container
+if needed. Remove it with `./bilia uninstall-login`; startup output goes to
+`/tmp/bilianalyzer-background.log`. `./bilia stop` and `./bilia down` unload the
+agent for the current login session so an intentional stop is not undone five
+minutes later.
+
+Scraping happens in the server process. Once a fetch has been submitted, you
+can close the browser tab; opening the dashboard later reads the stored result
+and does not start another scrape. If the container restarts mid-fetch, the
+unfinished batch resumes and skips videos it already stored.
 
 ### See it with data, immediately
 
@@ -52,22 +65,44 @@ every panel with plausible data without one:
 docker compose exec app python -m scripts.seed_demo
 ```
 
-That seeds a fictional creator with a few months of videos, comments and
-danmaku. Pass `--reset` to start over.
+That seeds a fictional creator with a few months of video metadata and
+performance figures. Pass `--reset` to start over.
 
 ## Using it
 
-1. **New query** — enter a creator's UID (the number in
+1. **Add creator** — enter a creator's UID (the number in
    `space.bilibili.com/546195`) and pick a date range. The sidebar shows fetch
    progress.
 2. **Dashboard** — summary tiles, view-count trend, interaction comparison,
-   views-vs-engagement scatter, duration analysis, publish-hour density, and
-   word tables you can click through to the underlying danmaku and comments.
-   Audience segments (gender, membership, level, region) double as filter axes.
+   views-vs-engagement scatter, duration analysis, and publishing cadence. The
+   creator is the directory; individual fetches are batches underneath it.
+   Account-wide followers, total views and total likes come from Bilibili's
+   creator APIs. The latest 30–50 videos are refreshed for performance snapshots,
+   while follower, account-view and account-like history is stored as separate
+   creator snapshots and shown as two side-by-side charts: followers on the
+   left, and account views plus likes on the right.
 3. **Video detail** — one video's numbers with a radar chart and deltas against
-   the query's own average.
+   the creator's merged video library.
 4. **AI analysis** — configure an OpenAI-compatible Base URL, key and model in
    Settings, then ask follow-up questions; answers stream back.
+
+Use **Fetch another range** on a creator page to append more videos. Existing
+videos are reused by BV ID, so overlapping ranges do not scrape the whole
+catalogue again.
+
+**Capture snapshot** records the current stats for every video already in the
+creator library. By default it updates only the most recent 40 videos; change
+the 30–50 video window in Settings. These snapshots feed the creator growth
+curve by video age and the per-video view history chart. By default the server
+also captures one automatically every 24 hours; change
+`STATS_REFRESH_HOURS` or set it to `0` to use manual snapshots only. After
+downtime, startup immediately drains every overdue creator rather than waiting
+for the next periodic check. Missed timestamps cannot be reconstructed, so the
+first post-downtime snapshot is recorded at the actual restart time.
+
+The same background refresh stores Bilibili's site-wide ranking and the latest
+weekly must-watch list. Matching placements appear on creator dashboards and
+video detail pages.
 
 **SESSDATA is required for scraping.** `x/web-interface/view`, which every
 video goes through, answers HTTP 412 to requests without a logged-in session —
@@ -94,7 +129,6 @@ against someone getting the `.db` file alone, not against host access.
 |---|---|
 | Frontend | Vite · React 19 · TypeScript · Tailwind CSS v4 · Base UI · ECharts |
 | Backend | FastAPI · SQLAlchemy 2.0 (async) · aiosqlite · httpx |
-| Chinese NLP | jieba (tokenizing) · SnowNLP (sentiment) |
 | AI | OpenAI SDK, streamed over SSE, with tool calling |
 | Deploy | Docker Compose, single multi-stage image |
 
@@ -106,6 +140,7 @@ against someone getting the `.db` file alone, not against host access.
 | `DATA_DIR` | `./data` | Holds the database and `.secret_key` |
 | `SECRET_KEY` | *(generated)* | Fernet key. Generated on first run and persisted; set it explicitly to keep stored credentials readable across environments |
 | `CORS_ORIGINS` | `http://localhost:5173` | Only needed for the split dev setup. Empty disables CORS entirely |
+| `STATS_REFRESH_HOURS` | `24` | Background stats snapshot interval in hours; `0` disables automatic snapshots |
 
 ## Local development
 
@@ -119,7 +154,7 @@ uvicorn app.main:app --port 8000 --reload
 cd frontend && npm install && npm run dev      # http://localhost:5173
 ```
 
-`pytest` from `backend/`, `npm run build` and `npx eslint .` from `frontend/`.
+`pytest` from `backend/`; `npm test`, `npm run build` and `npx eslint .` from `frontend/`.
 Requires Python 3.11+ and Node 20+.
 
 ## License

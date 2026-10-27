@@ -53,26 +53,6 @@ def test_sign_params():
 
 
 @pytest.mark.asyncio
-async def test_get_danmakus_returns_empty_without_sessdata():
-    client = BilibiliClient.__new__(BilibiliClient)
-    client._sessdata = None
-
-    result = await client.get_danmakus(123)
-
-    assert result == []
-
-
-@pytest.mark.asyncio
-async def test_get_subtitle_returns_empty_without_sessdata():
-    client = BilibiliClient.__new__(BilibiliClient)
-    client._sessdata = None
-
-    result = await client.get_subtitle("BV1xx411c7mD", 1, 2)
-
-    assert result == ""
-
-
-@pytest.mark.asyncio
 async def test_validate_sessdata_returns_user_name():
     client = BilibiliClient.__new__(BilibiliClient)
     client._sessdata = "test-sessdata"
@@ -274,6 +254,69 @@ async def test_get_video_index_in_range_stops_after_page_reaches_start_date():
 
 
 @pytest.mark.asyncio
+async def test_get_video_index_in_range_falls_back_to_arc_search():
+    client = BilibiliClient.__new__(BilibiliClient)
+    calls = []
+
+    async def fake_request(url: str, params: dict | None = None, wbi: bool = False):
+        calls.append({"url": url, "params": params, "wbi": wbi})
+        if url.endswith("/x/series/recArchivesByKeywords"):
+            return {"code": -504, "message": "服务调用超时"}
+        if url.endswith("/x/space/wbi/arc/search"):
+            if params["pn"] == 1:
+                return {
+                    "code": 0,
+                    "data": {
+                        "list": {
+                            "vlist": [
+                                {"bvid": "BV1", "title": "First", "created": 1710201600},
+                                {"bvid": "BV2", "title": "Second", "created": 1710115200},
+                                *[
+                                    {
+                                        "bvid": f"BVFILLER{index}",
+                                        "title": "Outside range",
+                                        "created": 1710374400,
+                                    }
+                                    for index in range(48)
+                                ],
+                            ]
+                        },
+                        "page": {"count": 51},
+                    },
+                }
+            if params["pn"] == 2:
+                return {
+                    "code": 0,
+                    "data": {
+                        "list": {
+                            "vlist": [
+                                {"bvid": "BV3", "title": "Third", "created": 1710028800},
+                            ]
+                        },
+                        "page": {"count": 51},
+                    },
+                }
+        raise AssertionError(f"unexpected request: {url} {params}")
+
+    client._request = fake_request
+
+    result = await client.get_video_index_in_range(
+        546195, date(2024, 3, 10), date(2024, 3, 12)
+    )
+
+    assert [call["url"] for call in calls] == [
+        "https://api.bilibili.com/x/series/recArchivesByKeywords",
+        "https://api.bilibili.com/x/space/wbi/arc/search",
+        "https://api.bilibili.com/x/space/wbi/arc/search",
+    ]
+    assert calls[1]["wbi"] is True
+    assert calls[2]["wbi"] is True
+    assert result["source"] == "arc_search"
+    assert [video["bvid"] for video in result["videos"]] == ["BV1", "BV2", "BV3"]
+    assert result["is_complete_snapshot"] is True
+
+
+@pytest.mark.asyncio
 async def test_request_retries_transient_412_for_non_wbi_calls():
     client = BilibiliClient.__new__(BilibiliClient)
     client._fingerprint_ready = True
@@ -461,6 +504,7 @@ async def test_get_video_detail_marks_live_replay():
                     "aid": 1,
                     "cid": 2,
                     "title": "【直播回放】超短电影回(已报备) 2026年03月29日20点场",
+                    "owner": {"mid": 946974},
                     "desc": "",
                     "pic": "http://example.com/cover.jpg",
                     "duration": 100,
@@ -477,7 +521,6 @@ async def test_get_video_detail_marks_live_replay():
                     "pages": [
                         {"page": 1, "cid": 2, "part": "【直播回放】超短电影回(已报备) 2026年03月29日20点场"}
                     ],
-                    "subtitle": {"list": []},
                 },
             }
         if url.endswith("/x/tag/archive/tags"):
@@ -489,6 +532,50 @@ async def test_get_video_detail_marks_live_replay():
     result = await client.get_video_detail("BV1")
 
     assert result["is_live_replay"] is True
+    assert result["owner_uid"] == 946974
+
+
+@pytest.mark.asyncio
+async def test_get_user_info_includes_creator_totals():
+    client = BilibiliClient.__new__(BilibiliClient)
+    client.BASE = BilibiliClient.BASE
+
+    async def fake_request(url: str, params: dict | None = None, wbi: bool = False):
+        if url.endswith("/x/web-interface/card"):
+            return {
+                "code": 0,
+                "data": {
+                    "card": {
+                        "name": "Creator",
+                        "face": "avatar.jpg",
+                        "fans": 100,
+                        "attention": 7,
+                    },
+                    "follower": 101,
+                    "archive_count": 55,
+                    "like_num": 900,
+                },
+            }
+        if url.endswith("/x/relation/stat"):
+            return {"code": 0, "data": {"follower": 102, "following": 8}}
+        if url.endswith("/x/space/upstat"):
+            return {
+                "code": 0,
+                "data": {"archive": {"view": 10000}, "likes": 1000},
+            }
+        if url.endswith("/x/space/navnum"):
+            return {"code": 0, "data": {"video": 56}}
+        raise AssertionError(f"unexpected url: {url}")
+
+    client._request = fake_request
+    result = await client.get_user_info(42)
+
+    assert result["name"] == "Creator"
+    assert result["followers"] == 102
+    assert result["following"] == 8
+    assert result["creator_total_views"] == 10000
+    assert result["creator_total_likes"] == 1000
+    assert result["archive_count"] == 56
 
 
 @pytest.mark.asyncio
