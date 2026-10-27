@@ -34,6 +34,9 @@ revival that rewrote most of the surface. For anything before that, read
   day, scaled against the calendar's peak. Hover text includes that day's peak
   views, while the day-detail list continues to show every upload and its
   individual playback count.
+- **CI now covers both `main` and `simplify`.** The active repository keeps
+  `simplify` as its default branch, so pushing it must run the full backend and
+  frontend gates rather than waiting for a pull request.
 
 ### Removed
 
