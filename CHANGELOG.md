@@ -29,6 +29,11 @@ revival that rewrote most of the surface. For anything before that, read
   workflow with asset and SPA fallback paths derived from the repository name.
   Settings, credentials, AI conversations and the database itself are excluded
   from the public artifact.
+- **`./bilia publish-static` now performs the complete public-data refresh.**
+  It exports the sanitized snapshot, commits only that file, skips an empty
+  commit when nothing changed, and pushes from `main` or `simplify`. Export
+  failure stops before any Git operation so a failed scrape cannot be
+  published by accident.
 
 ### Changed
 

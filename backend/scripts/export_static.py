@@ -186,11 +186,25 @@ async def build_static_snapshot(
 
 def write_snapshot(snapshot: dict[str, Any], output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
+    if output.is_file():
+        try:
+            previous = json.loads(output.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            previous = None
+        if isinstance(previous, dict):
+            previous_data = dict(previous)
+            current_data = dict(snapshot)
+            previous_data.pop("generated_at", None)
+            current_data.pop("generated_at", None)
+            if current_data == previous_data:
+                snapshot = previous
+
+    payload = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    if output.is_file() and output.read_text(encoding="utf-8") == payload:
+        return
+
     temporary = output.with_suffix(f"{output.suffix}.tmp")
-    temporary.write_text(
-        json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    temporary.write_text(payload, encoding="utf-8")
     temporary.replace(output)
 
 

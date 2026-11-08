@@ -78,6 +78,37 @@ export_static() {
     --output /workspace/frontend/public/static-data/snapshot.json
 }
 
+publish_static() {
+  local branch snapshot
+  branch="$(git branch --show-current)"
+  snapshot="frontend/public/static-data/snapshot.json"
+
+  case "$branch" in
+    main|simplify)
+      ;;
+    *)
+      echo "publish-static must run from main or simplify; current branch: ${branch:-detached HEAD}" >&2
+      exit 1
+      ;;
+  esac
+
+  if ! git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+    echo "Current branch has no upstream; configure one before publishing" >&2
+    exit 1
+  fi
+
+  export_static
+  git add -- "$snapshot"
+
+  if git diff --cached --quiet -- "$snapshot"; then
+    echo "Public snapshot is unchanged; no commit created"
+  else
+    git commit -m "data: refresh public dashboard snapshot" -- "$snapshot"
+  fi
+
+  git push
+}
+
 case "${1:-start}" in
   start)
     start
@@ -95,6 +126,9 @@ case "${1:-start}" in
     ;;
   export-static)
     export_static
+    ;;
+  publish-static)
+    publish_static
     ;;
   restart)
     start
@@ -169,7 +203,7 @@ EOF
     echo "Removed login startup"
     ;;
   *)
-    echo "usage: ./bilia [start|open|status|logs|export-static|restart|stop|down|install-login|uninstall-login]" >&2
+    echo "usage: ./bilia [start|open|status|logs|export-static|publish-static|restart|stop|down|install-login|uninstall-login]" >&2
     exit 2
     ;;
 esac

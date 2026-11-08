@@ -139,16 +139,22 @@ the same response models as the API, then publishes only creator and video data
 needed by the dashboard; `app_settings`, AI conversations, credentials and the
 SQLite database never enter the static build.
 
-Export after the local app has collected the data you want to publish:
+Export and publish after the local app has collected the data you want to
+publish:
 
 ```bash
-./bilia export-static
+./bilia publish-static
 ```
 
-This writes `frontend/public/static-data/snapshot.json`. Commit that file and
-push it to either `main` or `simplify`. The
+This writes `frontend/public/static-data/snapshot.json`, commits only that
+snapshot with `data: refresh public dashboard snapshot`, and pushes the current
+`main` or `simplify` branch. A failed export stops before Git runs, and an
+unchanged snapshot skips the empty commit. The
 [static Pages workflow](.github/workflows/pages.yml) verifies the snapshot,
 builds the frontend in read-only mode and deploys `frontend/dist`.
+
+Run `./bilia export-static` instead when you only want to regenerate the local
+snapshot without committing or pushing it.
 
 In the GitHub repository, open **Settings → Pages** once and select **GitHub
 Actions** as the source. A project site is published at

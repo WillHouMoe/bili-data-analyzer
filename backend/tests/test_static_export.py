@@ -110,3 +110,25 @@ async def test_static_snapshot_contains_dashboard_data_but_no_private_tables(
     assert "Private message" not in output.read_text()
 
     await engine.dispose()
+
+
+def test_writing_unchanged_data_preserves_generated_timestamp(tmp_path):
+    output = tmp_path / "snapshot.json"
+    snapshot = {
+        "schema_version": 1,
+        "generated_at": "2026-11-08T14:00:00+00:00",
+        "creators": [{"uid": 42}],
+    }
+    write_snapshot(snapshot, output)
+    original = output.read_text()
+
+    refreshed = dict(snapshot)
+    refreshed["generated_at"] = "2026-11-08T15:00:00+00:00"
+    write_snapshot(refreshed, output)
+
+    assert output.read_text() == original
+
+    refreshed["creators"] = [{"uid": 42}, {"uid": 43}]
+    write_snapshot(refreshed, output)
+
+    assert '"generated_at":"2026-11-08T15:00:00+00:00"' in output.read_text()

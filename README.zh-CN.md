@@ -72,10 +72,12 @@ docker compose exec app python -m scripts.seed_demo
 本地收集好要公开的数据后运行：
 
 ```bash
-./bilia export-static
+./bilia publish-static
 ```
 
-这会生成 `frontend/public/static-data/snapshot.json`。提交该文件并推送到 `main` 或 `simplify`，[静态 Pages 工作流](.github/workflows/pages.yml) 会检查快照、以只读模式构建前端，并部署 `frontend/dist`。
+这会生成 `frontend/public/static-data/snapshot.json`，只提交该快照并使用 `data: refresh public dashboard snapshot` 作为提交信息，然后推送当前的 `main` 或 `simplify` 分支。导出失败时不会执行 Git 操作；快照没有变化时会跳过空提交。[静态 Pages 工作流](.github/workflows/pages.yml) 会检查快照、以只读模式构建前端，并部署 `frontend/dist`。
+
+如果只想在本地重新生成快照、不提交也不推送，请运行 `./bilia export-static`。
 
 在 GitHub 仓库的 **Settings → Pages** 中首次选择 **GitHub Actions** 作为来源。项目站点会发布到 `https://<owner>.github.io/<repository>/`，工作流会根据仓库名自动设置子路径。
 
