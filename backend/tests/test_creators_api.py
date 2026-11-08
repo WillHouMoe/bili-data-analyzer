@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -8,6 +8,7 @@ from app.api import creators as creators_api
 from app.api import fetch as fetch_api
 from app.api.creators import (
     creator_stats_summary,
+    creator_video_comparison,
     delete_creator,
     get_creator,
     list_creator_videos,
@@ -20,6 +21,7 @@ from app.models import (
     CreatorStatsSnapshot,
     Query,
     QueryVideo,
+    RankingEntry,
     User,
     Video,
     VideoStats,
@@ -128,6 +130,159 @@ async def test_creator_video_list_is_deduplicated_and_searchable(session_factory
     assert result.total == 1
     assert [item.bvid for item in result.items] == ["BVOLD"]
     assert result.items[0].stats.views == 150
+
+
+@pytest.mark.asyncio
+async def test_creator_video_list_defaults_to_newest_first(session_factory):
+    async with session_factory() as session:
+        await _seed_library(session)
+        result = await list_creator_videos(
+            uid=42,
+            page=1,
+            page_size=100,
+            search="",
+            db=session,
+        )
+
+    assert [item.bvid for item in result.items] == ["BVNEW", "BVOLD"]
+
+
+@pytest.mark.asyncio
+async def test_creator_video_list_marks_videos_outside_maintenance_window(
+    session_factory,
+):
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        session.add(User(uid=44, name="Archive creator"))
+        session.add(
+            Video(
+                bvid="BVARCHIVE",
+                uid=44,
+                title="Archive",
+                published_at=now - timedelta(days=400),
+            )
+        )
+        session.add(VideoStats(bvid="BVARCHIVE", views=10))
+        await session.commit()
+
+        result = await list_creator_videos(
+            uid=44,
+            sort_by="views",
+            order="desc",
+            page=1,
+            page_size=100,
+            search="",
+            db=session,
+        )
+
+    assert result.items[0].is_maintained is False
+
+
+@pytest.mark.asyncio
+async def test_creator_comparison_uses_local_cohort(session_factory):
+    async with session_factory() as session:
+        session.add(User(uid=46, name="Comparing creator"))
+        videos = [
+            ("BVTARGET", datetime(2026, 7, 1), 600),
+            ("BVPEER1", datetime(2026, 6, 20), 400),
+            ("BVPEER2", datetime(2026, 6, 10), 500),
+            ("BVPEER3", datetime(2026, 5, 20), 900),
+            ("BVOLD", datetime(2024, 1, 1), 1),
+        ]
+        session.add_all(
+            [
+                Video(
+                    bvid=bvid,
+                    uid=46,
+                    title=bvid,
+                    published_at=published_at,
+                )
+                for bvid, published_at, _ in videos
+            ]
+        )
+        await session.flush()
+        session.add_all(
+            [
+                VideoStats(bvid=bvid, views=views)
+                for bvid, _, views in videos
+            ]
+        )
+        await session.commit()
+
+        comparison = await creator_video_comparison(46, "BVTARGET", session)
+
+    assert comparison.baseline.sample_size == 3
+    assert comparison.baseline_values[0] == 500
+    assert comparison.percentage_diff[0] == 20
+    assert comparison.percentile_ranks[0] == 66.7
+
+
+@pytest.mark.asyncio
+async def test_creator_achievements_use_honor_reply_data_for_library_only(
+    session_factory,
+):
+    async with session_factory() as session:
+        session.add(User(uid=45, name="Achievement creator"))
+        session.add(
+            Video(
+                bvid="BVINLIB",
+                uid=45,
+                title="In library",
+            )
+        )
+        session.add(VideoStats(bvid="BVINLIB", views=100))
+        session.add_all(
+            [
+                RankingEntry(
+                    kind="weekly",
+                    period="weekly-396",
+                    period_name="第396期每周必看",
+                    rank=0,
+                    bvid="BVINLIB",
+                    title="In library",
+                    owner_uid=45,
+                    owner_name="Achievement creator",
+                ),
+                RankingEntry(
+                    kind="highest",
+                    period="all-time",
+                    period_name="全站排行榜最高第1名",
+                    rank=1,
+                    bvid="BVINLIB",
+                    title="In library",
+                    owner_uid=45,
+                    owner_name="Achievement creator",
+                ),
+                RankingEntry(
+                    kind="popular",
+                    period="2026-10-27",
+                    period_name="Current chart",
+                    rank=2,
+                    bvid="BVINLIB",
+                    title="In library",
+                    owner_uid=45,
+                    owner_name="Achievement creator",
+                ),
+                RankingEntry(
+                    kind="weekly",
+                    period="weekly-395",
+                    period_name="第395期每周必看",
+                    rank=0,
+                    bvid="BVOUTSIDE",
+                    title="Not scraped",
+                    owner_uid=45,
+                    owner_name="Achievement creator",
+                ),
+            ]
+        )
+        await session.commit()
+
+        detail = await get_creator(45, session)
+
+    assert {(item.kind, item.bvid) for item in detail.rankings} == {
+        ("weekly", "BVINLIB"),
+        ("highest", "BVINLIB"),
+    }
 
 
 @pytest.mark.asyncio
@@ -363,7 +518,7 @@ async def test_manual_stats_refresh_queues_background_snapshot(
 
     assert response == {"status": "pending"}
     assert user.refresh_status == "pending"
-    assert user.refresh_progress == "Queued to capture a new stats snapshot"
+    assert user.refresh_progress == "Queued to refresh due statistics"
 
 
 @pytest.mark.asyncio

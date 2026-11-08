@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel
 
 
 class SettingsResponse(BaseModel):
@@ -7,7 +9,7 @@ class SettingsResponse(BaseModel):
     ai_api_key: str  # masked if set
     ai_model: str
     proxy_list: str
-    refresh_window_size: int
+    maintenance_mode: Literal["windowed", "unlimited"]
 
 
 class SettingsUpdate(BaseModel):
@@ -16,7 +18,7 @@ class SettingsUpdate(BaseModel):
     ai_api_key: str | None = None
     ai_model: str | None = None
     proxy_list: str | None = None
-    refresh_window_size: int | None = Field(default=None, ge=30, le=50)
+    maintenance_mode: Literal["windowed", "unlimited"] | None = None
 
 
 class SessdataTestRequest(BaseModel):

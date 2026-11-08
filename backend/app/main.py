@@ -19,7 +19,10 @@ from app.services.fetch_credentials import (
     load_fetch_credentials,
 )
 from app.services.fetch_task import run_fetch
+from app.services.rankings import rankings_refresh_loop
 from app.services.stats_refresh import stats_refresh_loop
+from app.services.video_discovery import video_discovery_loop
+from app.services.video_maintenance import ensure_video_refresh_schedules
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +84,22 @@ async def _reset_interrupted_refreshes() -> None:
 async def lifespan(app: FastAPI):
     Path(settings.DATA_DIR).mkdir(parents=True, exist_ok=True)
     await init_db()
+    async with async_session() as db:
+        scheduled = await ensure_video_refresh_schedules(db)
+        if scheduled:
+            await db.commit()
+            logger.info(
+                "Initialized maintenance schedules for %d video(s)",
+                scheduled,
+            )
     await _resume_interrupted_queries()
     await _reset_interrupted_refreshes()
     if settings.STATS_REFRESH_HOURS > 0:
         track_task(stats_refresh_loop())
+    if settings.RANKING_REFRESH_MINUTES > 0:
+        track_task(rankings_refresh_loop())
+    if settings.NEW_VIDEO_REFRESH_MINUTES > 0:
+        track_task(video_discovery_loop())
     yield
 
 

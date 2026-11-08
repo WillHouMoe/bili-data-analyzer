@@ -3,6 +3,7 @@ import ReactECharts from "echarts-for-react";
 import { useTranslation } from "react-i18next";
 import { chartBase, valueAxis, useChartTokens, NAME_SIZE } from "@/lib/chart-theme";
 import { GAP, formatExact, formatPercent } from "@/lib/format";
+import { autoScaleRange, scaledDecimal, scaledNumber } from "@/lib/chart-scale";
 import { NoInk } from "@/components/proof/States";
 import type { VideoSummary } from "@/types";
 
@@ -28,62 +29,83 @@ export default function ScatterChart({
   }, [videos]);
 
   const option = useMemo(
-    () => ({
-      ...chartBase(k),
-      tooltip: {
-        ...chartBase(k).tooltip,
-        trigger: "item",
-        confine: true,
-        formatter: (p: { data: { name: string; value: number[] } }) =>
-          `${p.data.name}<br/>${t("stats.totalViews")}${GAP}${formatExact(p.data.value[0], i18n.language)}` +
-          `<br/>${t("stats.interactionRate")}${GAP}${formatPercent(p.data.value[1])}`,
-      },
-      grid: { left: 4, right: 14, top: 18, bottom: 22, containLabel: true },
-      xAxis: valueAxis(k, {
-        name: t("stats.totalViews"),
-        nameLocation: "middle",
-        nameGap: 26,
-        nameTextStyle: { color: k.ink3, fontSize: NAME_SIZE, fontFamily: k.font },
-        splitLine: { show: false },
-      }),
-      yAxis: valueAxis(k, {
-        axisLabel: {
-          color: k.ink3,
-          fontSize: 10,
-          fontFamily: k.font,
-          formatter: (v: number) => `${v.toFixed(1)}%`,
+    () => {
+      const viewsRange = autoScaleRange(
+        videos.map((video) => video.stats.views),
+      );
+      const rateRange = autoScaleRange(
+        videos.map((video) => video.stats.interaction_rate),
+      );
+      const viewsSpan = viewsRange.max - viewsRange.min;
+      const rateSpan = rateRange.max - rateRange.min;
+      return {
+        ...chartBase(k),
+        tooltip: {
+          ...chartBase(k).tooltip,
+          trigger: "item",
+          confine: true,
+          formatter: (p: { data: { name: string; value: number[] } }) =>
+            `${p.data.name}<br/>${t("stats.totalViews")}${GAP}${formatExact(p.data.value[0], i18n.language)}` +
+            `<br/>${t("stats.interactionRate")}${GAP}${formatPercent(p.data.value[1])}`,
         },
-      }),
-      series: [
-        {
-          type: "scatter",
-          data: videos.map((v) => ({
-            value: [v.stats.views, v.stats.interaction_rate],
-            name: v.title,
-            bvid: v.bvid,
-          })),
-          symbolSize: 7,
-          itemStyle: { color: k.ink, opacity: 0.6 },
-          emphasis: { itemStyle: { color: k.mark, opacity: 1 } },
-          markLine:
-            meanRate !== null
-              ? {
-                  silent: true,
-                  symbol: "none",
-                  lineStyle: { color: k.pencil, width: 1, type: "dashed" },
-                  label: {
-                    formatter: `${t("stats.avgInteraction")} ${formatPercent(meanRate, 2)}`,
-                    color: k.pencil,
-                    fontSize: 10,
-                    fontFamily: k.font,
-                    position: "insideEndTop",
-                  },
-                  data: [{ yAxis: meanRate }],
-                }
-              : undefined,
-        },
-      ],
-    }),
+        grid: { left: 4, right: 14, top: 18, bottom: 22, containLabel: true },
+        xAxis: valueAxis(k, {
+          name: t("stats.totalViews"),
+          nameLocation: "middle",
+          nameGap: 26,
+          min: viewsRange.min,
+          max: viewsRange.max,
+          axisLabel: {
+            color: k.ink3,
+            fontSize: 10,
+            fontFamily: k.font,
+            formatter: (value: number) => scaledNumber(value, viewsSpan),
+          },
+          nameTextStyle: { color: k.ink3, fontSize: NAME_SIZE, fontFamily: k.font },
+          splitLine: { show: false },
+        }),
+        yAxis: valueAxis(k, {
+          min: rateRange.min,
+          max: rateRange.max,
+          axisLabel: {
+            color: k.ink3,
+            fontSize: 10,
+            fontFamily: k.font,
+            formatter: (value: number) =>
+              `${scaledDecimal(value, rateSpan)}%`,
+          },
+        }),
+        series: [
+          {
+            type: "scatter",
+            data: videos.map((v) => ({
+              value: [v.stats.views, v.stats.interaction_rate],
+              name: v.title,
+              bvid: v.bvid,
+            })),
+            symbolSize: 7,
+            itemStyle: { color: k.ink, opacity: 0.6 },
+            emphasis: { itemStyle: { color: k.mark, opacity: 1 } },
+            markLine:
+              meanRate !== null
+                ? {
+                    silent: true,
+                    symbol: "none",
+                    lineStyle: { color: k.pencil, width: 1, type: "dashed" },
+                    label: {
+                      formatter: `${t("stats.avgInteraction")} ${formatPercent(meanRate, 2)}`,
+                      color: k.pencil,
+                      fontSize: 10,
+                      fontFamily: k.font,
+                      position: "insideEndTop",
+                    },
+                    data: [{ yAxis: meanRate }],
+                  }
+                : undefined,
+          },
+        ],
+      };
+    },
     [videos, meanRate, k, t, i18n.language],
   );
 

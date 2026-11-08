@@ -433,7 +433,7 @@ class BilibiliClient:
                 entries.append(normalized)
         return entries
 
-    async def get_weekly_must_watch(self) -> list[dict]:
+    async def get_weekly_series(self) -> list[dict]:
         series = await self._request(
             f"{self.BASE}/x/web-interface/popular/series/list"
         )
@@ -441,11 +441,27 @@ class BilibiliClient:
             raise Exception(
                 f"Bilibili API error {series.get('code')}: {series.get('message')}"
             )
-        lists = (series.get("data") or {}).get("list") or []
-        latest = next((item for item in lists if item.get("status") == 2), None)
-        if latest is None:
-            return []
-        number = int(latest["number"])
+        return [
+            item
+            for item in ((series.get("data") or {}).get("list") or [])
+            if item.get("number") is not None
+        ]
+
+    async def get_weekly_must_watch(
+        self,
+        number: int | None = None,
+        period_name: str | None = None,
+    ) -> list[dict]:
+        if number is None:
+            issues = await self.get_weekly_series()
+            latest = next(
+                (item for item in issues if item.get("status") == 2),
+                None,
+            )
+            if latest is None:
+                return []
+            number = int(latest["number"])
+            period_name = period_name or latest.get("name")
         detail = await self._request(
             f"{self.BASE}/x/web-interface/popular/series/one",
             params={"number": number},
@@ -457,13 +473,13 @@ class BilibiliClient:
         payload = detail.get("data") or {}
         period = f"weekly-{number}"
         entries = []
-        for index, item in enumerate(payload.get("list") or [], start=1):
+        for item in payload.get("list") or []:
             normalized = self._normalize_ranking_item(
                 item,
-                index,
+                0,
                 "weekly",
                 period,
-                latest.get("name"),
+                period_name,
             )
             if normalized:
                 entries.append(normalized)
@@ -635,6 +651,78 @@ class BilibiliClient:
     async def get_video_list(self, uid: int, page: int = 1, page_size: int = 50) -> dict:
         result = await self.get_video_index(uid)
         return self._slice_video_page(result["videos"], page, page_size)
+
+    async def get_video_stubs_since(
+        self,
+        uid: int,
+        since_ts: int,
+    ) -> list[dict]:
+        """Return newest-to-oldest video stubs down to an existing timestamp."""
+        page_size = 50
+        videos: list[dict] = []
+        try:
+            for page_num in range(1, 11):
+                result = await self._fetch_rec_archives_page(
+                    uid,
+                    pn=page_num,
+                    ps=page_size,
+                )
+                page_videos = result.get("videos") or []
+                videos.extend(page_videos)
+                videos = self._dedupe_video_stubs(videos)
+                archives = result.get("archives") or []
+                oldest = min(
+                    (
+                        int(video.get("published_ts", 0) or 0)
+                        for video in page_videos
+                    ),
+                    default=0,
+                )
+                if (
+                    not archives
+                    or len(archives) < page_size
+                    or (oldest > 0 and oldest <= since_ts)
+                ):
+                    break
+        except Exception as exc:
+            logger.warning(
+                "recArchives latest pages unavailable for uid %s (%s); "
+                "falling back to WBI arc/search",
+                uid,
+                exc,
+            )
+            videos = []
+            for page_num in range(1, 11):
+                result = await self._fetch_arc_search_page(
+                    uid,
+                    pn=page_num,
+                    page_size=page_size,
+                )
+                page_videos = result.get("videos") or []
+                videos.extend(page_videos)
+                videos = self._dedupe_video_stubs(videos)
+                raw_videos = result.get("raw_videos") or []
+                oldest = min(
+                    (
+                        int(video.get("published_ts", 0) or 0)
+                        for video in page_videos
+                    ),
+                    default=0,
+                )
+                if (
+                    not raw_videos
+                    or len(raw_videos) < page_size
+                    or (oldest > 0 and oldest <= since_ts)
+                ):
+                    break
+        videos = self._filter_live_replay_stubs(videos)
+        if since_ts > 0:
+            videos = [
+                video
+                for video in videos
+                if int(video.get("published_ts", 0) or 0) >= since_ts
+            ]
+        return videos
 
     async def _fetch_rec_archives_page(self, uid: int, pn: int, ps: int | None = None) -> dict:
         params = {"mid": uid, "keywords": "", "orderby": "senddate", "pn": pn}
@@ -842,7 +930,7 @@ class BilibiliClient:
             "is_complete_snapshot": is_complete_snapshot,
         }
 
-    async def get_video_detail(self, bvid: str) -> dict:
+    async def get_video_detail(self, bvid: str, *, include_tags: bool = True) -> dict:
         data = await self._request(
             f"{self.BASE}/x/web-interface/view",
             params={"bvid": bvid},
@@ -851,29 +939,35 @@ class BilibiliClient:
             raise Exception(f"Bilibili API error {data.get('code')}: {data.get('message')}")
         d = data["data"]
         stat = d["stat"]
-        # /view doesn't include Tags separately; try to get from honor_reply or tag endpoint
         tags_str = ""
-        try:
-            tag_data = await self._request(
-                f"{self.BASE}/x/tag/archive/tags",
-                params={"bvid": bvid},
-            )
-            if tag_data.get("code") == 0:
-                tags = tag_data.get("data") or []
-                tags_str = ",".join(t["tag_name"] for t in tags if "tag_name" in t)
-        except Exception:
-            pass
+        if include_tags:
+            # /view doesn't include tags separately. Snapshot refreshes skip this
+            # extra request so frequent maintenance does not double API traffic.
+            try:
+                tag_data = await self._request(
+                    f"{self.BASE}/x/tag/archive/tags",
+                    params={"bvid": bvid},
+                )
+                if tag_data.get("code") == 0:
+                    tags = tag_data.get("data") or []
+                    tags_str = ",".join(
+                        t["tag_name"] for t in tags if "tag_name" in t
+                    )
+            except Exception:
+                pass
         pages = d.get("pages") or []
         page_parts = [p.get("part", "") for p in pages]
         title = d["title"]
         return {
             "bvid": d["bvid"],
             "owner_uid": d.get("owner", {}).get("mid"),
+            "owner_name": d.get("owner", {}).get("name") or "",
             "is_live_replay": self._is_live_replay_video(title, page_parts),
             "title": title, "description": d.get("desc", ""),
             "cover_url": d["pic"], "duration": d["duration"],
             "published_at": d["pubdate"],
             "tags": tags_str,
+            "honors": (d.get("honor_reply") or {}).get("honor") or [],
             "stats": {
                 "views": stat["view"], "likes": stat["like"],
                 "coins": stat["coin"], "favorites": stat["favorite"],

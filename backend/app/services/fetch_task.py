@@ -12,6 +12,11 @@ from app.models import Query, QueryVideo, User, Video, VideoStats
 from app.services.bilibili import BilibiliBlockedError, BilibiliClient
 from app.services.creator_profile import apply_creator_info
 from app.services.creator_stats_history import record_creator_stats_snapshot
+from app.services.video_achievements import record_video_honors
+from app.services.video_maintenance import (
+    ensure_video_refresh_schedules,
+    schedule_after_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,15 +182,24 @@ async def run_fetch(query_id: int, uid: int, start_date, end_date, sessdata: str
                     # key, and query_videos can otherwise be inserted before the
                     # video it references, rolling back the first video.
                     await db.flush()
+                    await record_video_honors(db, video, detail)
 
                     # Add stats snapshot
                     s = detail["stats"]
+                    sampled_at = datetime.now(UTC)
                     db.add(VideoStats(
                         bvid=bvid, views=s["views"], likes=s["likes"],
                         coins=s["coins"], favorites=s["favorites"],
                         shares=s["shares"], danmaku_count=s["danmaku_count"],
                         comment_count=s["comment_count"],
+                        fetched_at=sampled_at,
                     ))
+                    schedule_after_snapshot(
+                        video,
+                        [],
+                        sampled_at,
+                        s["views"],
+                    )
 
                     # Link to query
                     if bvid not in already_linked:
@@ -200,6 +214,7 @@ async def run_fetch(query_id: int, uid: int, start_date, end_date, sessdata: str
                         await asyncio.sleep(break_time)
 
                 # Step 4: Compute aggregates
+                await ensure_video_refresh_schedules(db)
                 await db.commit()
                 query.video_count = len(already_linked)
                 stmt = (select(VideoStats)

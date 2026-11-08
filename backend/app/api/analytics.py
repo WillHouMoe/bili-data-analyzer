@@ -14,6 +14,7 @@ from app.schemas.analytics import (
     TrendPoint,
     VideoComparison,
 )
+from app.services.video_comparison import build_video_comparison
 
 router = APIRouter()
 
@@ -93,48 +94,29 @@ async def video_comparison(
     query_id: int = QueryParam(...),
     db: AsyncSession = Depends(get_db),
 ):
-    stats_result = await db.execute(
-        select(VideoStats)
-        .where(VideoStats.bvid == bvid)
-        .order_by(VideoStats.fetched_at.desc())
-        .limit(1)
-    )
-    video_stats = stats_result.scalar_one_or_none()
-    if not video_stats:
-        raise HTTPException(status_code=404)
-
     all_result = await db.execute(
-        select(VideoStats)
-        .join(QueryVideo, QueryVideo.bvid == VideoStats.bvid)
+        select(Video, VideoStats)
+        .join(QueryVideo, QueryVideo.bvid == Video.bvid)
+        .join(VideoStats, VideoStats.bvid == Video.bvid)
         .where(QueryVideo.query_id == query_id)
     )
-    latest: dict[str, VideoStats] = {}
-    for stats in all_result.scalars().all():
-        if stats.bvid not in latest or stats.fetched_at > latest[stats.bvid].fetched_at:
-            latest[stats.bvid] = stats
+    latest: dict[str, tuple[Video, VideoStats]] = {}
+    for video, stats in all_result.all():
+        current = latest.get(video.bvid)
+        if current is None or (stats.fetched_at, stats.id) > (
+            current[1].fetched_at,
+            current[1].id,
+        ):
+            latest[video.bvid] = (video, stats)
 
-    count = len(latest) or 1
-    metrics = ["views", "likes", "coins", "favorites", "shares", "danmaku_count", "comment_count"]
-    labels = ["views", "likes", "coins", "favorites", "shares", "danmaku", "comments"]
+    target = latest.get(bvid)
+    if target is None:
+        raise HTTPException(status_code=404)
 
-    video_values = [float(getattr(video_stats, metric)) for metric in metrics]
-    average_values = [
-        sum(getattr(stats, metric) for stats in latest.values()) / count
-        for metric in metrics
-    ]
-    max_values = [
-        max(getattr(stats, metric) for stats in latest.values())
-        for metric in metrics
-    ]
-    percentage_diff = [
-        round((value - average) / average * 100, 1) if average > 0 else 0.0
-        for value, average in zip(video_values, average_values)
-    ]
-
-    return VideoComparison(
-        metrics=labels,
-        video_values=video_values,
-        average_values=[round(value, 1) for value in average_values],
-        max_values=[round(value, 1) for value in max_values],
-        percentage_diff=percentage_diff,
-    )
+    comparison = build_video_comparison(target[0], target[1], list(latest.values()))
+    if comparison is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Not enough earlier videos for a local comparison",
+        )
+    return comparison

@@ -21,6 +21,7 @@ class VideoSummary(APIModel):
     duration: int
     published_at: datetime | None
     tags: str | None
+    is_maintained: bool = True
     stats: VideoStatsSchema
 
 
@@ -28,7 +29,7 @@ class RankingMatch(APIModel):
     kind: str
     period: str
     period_name: str | None
-    rank: int
+    rank: int | None
     bvid: str
     title: str
     views: int

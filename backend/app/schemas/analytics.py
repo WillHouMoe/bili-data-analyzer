@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.schemas.base import APIModel
 
 
@@ -24,10 +26,21 @@ class InteractionData(APIModel):
     shares: int
 
 
+class ComparisonBaseline(APIModel):
+    """The local cohort and window used as the comparison reference."""
+
+    sample_size: int
+    window_days: int
+    published_from: datetime
+    published_to: datetime
+
+
 class VideoComparison(APIModel):
-    """For radar chart: this video's stats vs query average"""
+    """A video's values and standing against nearby earlier uploads."""
+
     metrics: list[str]
     video_values: list[float]
-    average_values: list[float]
-    percentage_diff: list[float]
-    max_values: list[float]  # Global max for each metric across all videos in query
+    baseline_values: list[float]
+    percentage_diff: list[float | None]
+    percentile_ranks: list[float]
+    baseline: ComparisonBaseline

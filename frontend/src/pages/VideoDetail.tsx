@@ -117,6 +117,12 @@ export default function VideoDetailPage() {
         ]}
       />
 
+      {!video.is_maintained && (
+        <p className="mx-4 mt-4 border-y border-rule bg-paper-2 px-3 py-2 text-note text-ink-2 md:mx-8">
+          {t("video.notMaintained")}
+        </p>
+      )}
+
       <div className="flex flex-col gap-10 px-4 pt-6 pb-16 md:px-8">
         <InkIn>
           <VideoHeader video={video} />

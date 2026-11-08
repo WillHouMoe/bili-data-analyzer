@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { chartBase, categoryAxis, valueAxis, useChartTokens } from "@/lib/chart-theme";
 import { formatExact } from "@/lib/format";
+import { autoScaleRange, scaledNumber } from "@/lib/chart-scale";
 import { Inking, NoInk } from "@/components/proof/States";
 import type { InteractionData } from "@/types";
 
@@ -47,27 +48,40 @@ export default function InteractionChart({
   );
 
   const option = useMemo(
-    () => ({
-      ...chartBase(k),
-      tooltip: {
-        ...chartBase(k).tooltip,
-        trigger: "axis",
-        axisPointer: { type: "shadow", shadowStyle: { color: k.mark, opacity: 0.06 } },
-        valueFormatter: (v: number) => formatExact(v, i18n.language),
-      },
-      grid: { left: 4, right: 12, top: 18, bottom: 4, containLabel: true },
-      xAxis: categoryAxis(k, { data: rows.map((r) => r.label) }),
-      yAxis: valueAxis(k),
-      series: [
-        {
-          name: t("chart.interaction"),
-          type: "bar",
-          barMaxWidth: 44,
-          data: rows.map((r, i) => ({ value: r.value, itemStyle: { color: k.seq[i] } })),
-          emphasis: { itemStyle: { color: k.mark } },
+    () => {
+      const range = autoScaleRange(rows.map((row) => row.value));
+      const span = range.max - range.min;
+      return {
+        ...chartBase(k),
+        tooltip: {
+          ...chartBase(k).tooltip,
+          trigger: "axis",
+          axisPointer: { type: "shadow", shadowStyle: { color: k.mark, opacity: 0.06 } },
+          valueFormatter: (v: number) => formatExact(v, i18n.language),
         },
-      ],
-    }),
+        grid: { left: 4, right: 12, top: 18, bottom: 4, containLabel: true },
+        xAxis: categoryAxis(k, { data: rows.map((r) => r.label) }),
+        yAxis: valueAxis(k, {
+          min: range.min,
+          max: range.max,
+          axisLabel: {
+            color: k.ink3,
+            fontSize: 10,
+            fontFamily: k.font,
+            formatter: (value: number) => scaledNumber(value, span),
+          },
+        }),
+        series: [
+          {
+            name: t("chart.interaction"),
+            type: "bar",
+            barMaxWidth: 44,
+            data: rows.map((r, i) => ({ value: r.value, itemStyle: { color: k.seq[i] } })),
+            emphasis: { itemStyle: { color: k.mark } },
+          },
+        ],
+      };
+    },
     [rows, k, t, i18n.language],
   );
 

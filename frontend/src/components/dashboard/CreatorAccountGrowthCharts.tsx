@@ -5,11 +5,11 @@ import { api } from "@/lib/api";
 import {
   categoryAxis,
   chartBase,
-  compactNumber,
   useChartTokens,
   valueAxis,
 } from "@/lib/chart-theme";
 import { formatExact } from "@/lib/format";
+import { autoScaleRange, scaledNumber } from "@/lib/chart-scale";
 import { toTimedSeries } from "@/lib/time-series";
 import { Column, Section } from "@/components/proof/Sheet";
 import { Inking, NoInk } from "@/components/proof/States";
@@ -56,6 +56,18 @@ function AccountChart({
     return <NoInk className="py-12" />;
   }
   const hasRightAxis = series.some((item) => item.axisIndex === 1);
+  const leftRange = autoScaleRange(
+    chartSeries
+      .filter((item) => (item.axisIndex ?? 0) === 0)
+      .flatMap((item) => item.data.map((point) => point[1])),
+  );
+  const rightRange = autoScaleRange(
+    chartSeries
+      .filter((item) => item.axisIndex === 1)
+      .flatMap((item) => item.data.map((point) => point[1])),
+  );
+  const leftSpan = leftRange.max - leftRange.min;
+  const rightSpan = rightRange.max - rightRange.min;
 
   const option = {
     ...chartBase(k),
@@ -114,23 +126,27 @@ function AccountChart({
     },
     yAxis: [
       valueAxis(k, {
+        min: leftRange.min,
+        max: leftRange.max,
         axisLabel: {
           color: k.ink3,
           fontSize: 10,
           fontFamily: k.font,
-          formatter: (n: number) => compactNumber(n),
+          formatter: (n: number) => scaledNumber(n, leftSpan),
         },
       }),
       ...(hasRightAxis
         ? [
             valueAxis(k, {
               position: "right",
+              min: rightRange.min,
+              max: rightRange.max,
               splitLine: { show: false },
               axisLabel: {
                 color: k.ink3,
                 fontSize: 10,
                 fontFamily: k.font,
-                formatter: (n: number) => compactNumber(n),
+                formatter: (n: number) => scaledNumber(n, rightSpan),
               },
             }),
           ]

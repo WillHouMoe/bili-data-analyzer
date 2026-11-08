@@ -478,8 +478,10 @@ export default function Dashboard() {
           <Section label={t("ranking.creatorSection")}>
             <Column label={t("ranking.current")}>
               <RankingHighlights
+                key={creatorId}
                 items={detail.rankings}
                 creatorId={creatorId}
+                collapsible
               />
             </Column>
           </Section>

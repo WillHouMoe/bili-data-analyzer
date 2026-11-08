@@ -17,10 +17,68 @@ revival that rewrote most of the surface. For anything before that, read
 
 ---
 
+## 2026-11-08
+
+### Changed
+
+- **Video radar comparisons now use a local cohort and percentile ranks
+  instead of an all-time average.** The baseline is the median of up to 20
+  earlier uploads from the 180 days before the video was published. Each radar
+  radius shows the video's percentile within that cohort, with the dashed
+  reference at P50. This keeps a creator's long-term audience growth and rare
+  outlier videos from dragging every comparison toward an irrelevant centre;
+  the detail page also reports the cohort size and window.
+
 ## 2026-10-27
 
 ### Changed
 
+- **The video catalogue now opens newest-first.** Both catalogue endpoints
+  default to `published_at` descending, and the dashboard starts on that same
+  order instead of ranking the initial view by play count. Readers can still
+  switch to any metric or reverse the publication order.
+- **Charts now fit their value axes to the observed range.** Growth lines,
+  account trends, interaction bars, duration comparisons and scatter plots add
+  proportional headroom instead of anchoring every axis at zero, so movements
+  remain legible when values sit far above the origin. Compact tick labels add
+  enough precision for the narrowed span, and non-negative data never receives
+  an invented negative minimum.
+- **The publishing calendar now follows a Monkeytype-style fluid wall.** Its
+  seven rows stretch to the available width instead of staying at a fixed
+  pixel size, months sit below the chart, and hovering or focusing a date
+  updates an inline readout with the count, peak views and representative
+  video before the existing date-detail interaction opens on click.
+- **Tracked creators now discover new uploads automatically.** A dedicated
+  background task scans each creator's newest archive pages down to the newest
+  video already stored, creates metadata, first stats and achievement records
+  for unseen uploads, and schedules them through the normal age-based refresh
+  cadence. The default scan interval is 30 minutes and can be disabled with
+  `NEW_VIDEO_REFRESH_MINUTES=0`.
+- **Bilibili rankings are now presented as long-lived achievements.** The
+  former ranking section has separate “Weekly must-watch” and “Site-wide
+  ranking” groups. Each library video is checked once for its retained
+  `honor_reply` achievements, including every weekly issue and the site-wide
+  chart's best-ever rank. Both achievement types use their Bilibili artwork in
+  the former rank column. Creator pages show five achievement rows per group
+  and reveal ten more per click; entries outside the scraped creator library
+  are excluded. The current chart is polled every 15 minutes only to detect
+  changes and is not shown as an achievement. Ranking polling now runs as its
+  own background task, independently from creator-profile and video sampling.
+- **Publishing calendars are now browsable one year at a time.** Libraries that
+  span more than a year expose a year selector and default to the newest year,
+  while shorter libraries keep their exact date range. A ruled annual summary
+  beside the wall reports video count, monthly pace, longest gap, busiest month
+  and cumulative views, while the year's five most-viewed videos sit below the
+  wall. The existing date-detail overlay is unchanged.
+- **Video snapshots now follow publication age instead of a latest-N window.**
+  Each video is scheduled independently: hourly on day one, then every 2, 4,
+  8 and 12 hours through successive age bands, daily through day 365, and
+  weekly in unlimited mode. The default one-year window pauses older videos
+  without deleting their history. A fresh ranking hit or a playback rate at
+  least twice the trailing median moves the next sample one tier earlier for
+  up to six observations. The cadence follows the Bilibili view-time study by
+  Dong et al. (2022), which sampled the latest videos every three hours and
+  found both a rapid early rise and later self-excited peaks.
 - **The visible product name is now BiliDataAnalyzer.** The sidebar,
   browser-tab title, API documentation title and both READMEs use the new
   name. Repository URLs and persistence identifiers keep their existing values
@@ -45,6 +103,18 @@ revival that rewrote most of the surface. For anything before that, read
   or connection testing. Existing server endpoints, credentials and
   conversations remain in place so the feature can be reintroduced without a
   destructive migration once there is a concrete product plan.
+
+### Fixed
+
+- **Radar tooltips no longer flicker between this video and the library
+  average.** Hovering now opens one fixed comparison table containing both
+  series across all seven metrics, so overlapping outlines cannot repeatedly
+  replace the tooltip's source or position.
+- **Weekly must-watch entries no longer display invented rank numbers.** The
+  weekly API returns an editorial list without ranks, but the scraper used each
+  item's list position as one. Existing rows are normalized on startup, and API
+  responses now expose `rank: null` for weekly entries while retaining real
+  ranks for the site-wide chart.
 
 ## 2026-10-25
 

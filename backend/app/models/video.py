@@ -17,6 +17,16 @@ class Video(Base):
     duration: Mapped[int] = mapped_column(Integer, default=0)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_stats_refresh_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        index=True,
+    )
+    stats_boost_remaining: Mapped[int] = mapped_column(Integer, default=0)
+    honors_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

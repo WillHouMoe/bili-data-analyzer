@@ -604,6 +604,36 @@ async def test_get_video_list_slices_video_index_result():
 
 
 @pytest.mark.asyncio
+async def test_weekly_must_watch_does_not_invent_rank_positions():
+    client = BilibiliClient.__new__(BilibiliClient)
+
+    def item(bvid: str) -> dict:
+        return {
+            "bvid": bvid,
+            "title": bvid,
+            "owner": {"mid": 946974, "name": "Creator"},
+            "stat": {"view": 100, "like": 10},
+        }
+
+    async def fake_request(url: str, params: dict | None = None, wbi: bool = False):
+        if url.endswith("/x/web-interface/popular/series/list"):
+            return {
+                "code": 0,
+                "data": {"list": [{"number": 396, "status": 2, "name": "第396期"}]},
+            }
+        if url.endswith("/x/web-interface/popular/series/one"):
+            assert params == {"number": 396}
+            return {"code": 0, "data": {"list": [item("BV1"), item("BV2")]}}
+        raise AssertionError(f"unexpected url: {url}")
+
+    client._request = fake_request
+    entries = await client.get_weekly_must_watch()
+
+    assert [entry["rank"] for entry in entries] == [0, 0]
+    assert all(entry["kind"] == "weekly" for entry in entries)
+
+
+@pytest.mark.asyncio
 async def test_persistent_412_raises_blocked_error(monkeypatch):
     """412 is Bilibili's risk control, not a transient failure.
 

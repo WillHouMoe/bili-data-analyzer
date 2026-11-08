@@ -59,12 +59,43 @@ async def init_db():
             "refresh_progress": "TEXT",
             "refresh_error": "TEXT",
             "refresh_retry_at": "DATETIME",
+            "last_video_scan_at": "DATETIME",
+            "video_scan_retry_at": "DATETIME",
         }
         for column, sql_type in user_migrations.items():
             if column not in user_columns:
                 await conn.execute(
                     text(f"ALTER TABLE users ADD COLUMN {column} {sql_type}")
                 )
+        video_columns = await conn.run_sync(
+            lambda sync_conn: {
+                column["name"]
+                for column in inspect(sync_conn).get_columns("videos")
+            }
+        )
+        video_migrations = {
+            "next_stats_refresh_at": "DATETIME",
+            "stats_boost_remaining": "INTEGER DEFAULT 0",
+            "honors_checked_at": "DATETIME",
+        }
+        for column, sql_type in video_migrations.items():
+            if column not in video_columns:
+                await conn.execute(
+                    text(f"ALTER TABLE videos ADD COLUMN {column} {sql_type}")
+                )
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_videos_next_stats_refresh_at
+                ON videos (next_stats_refresh_at)
+                """
+            )
+        )
+        # Weekly must-watch is an editorial list, not a ranked chart. Older
+        # refreshes stored the response position as a rank; normalize it.
+        await conn.execute(
+            text("UPDATE ranking_entries SET rank = 0 WHERE kind = 'weekly'")
+        )
         # Seed one account-history point for existing installs from their
         # current profile totals. Future refreshes append real observations.
         await conn.execute(

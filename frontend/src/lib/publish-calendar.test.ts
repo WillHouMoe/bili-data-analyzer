@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { VideoSummary } from "@/types";
-import { buildPublishCalendar } from "./publish-calendar";
+import {
+  buildPublishCalendar,
+  buildPublishCalendarSummary,
+  calendarYearOptions,
+} from "./publish-calendar";
 
 function video(publishedAt: string | null, views = 1): VideoSummary {
   return {
@@ -10,6 +14,7 @@ function video(publishedAt: string | null, views = 1): VideoSummary {
     duration: 60,
     published_at: publishedAt,
     tags: null,
+    is_maintained: true,
     stats: {
       views,
       likes: 0,
@@ -57,5 +62,54 @@ describe("buildPublishCalendar", () => {
     expect(calendar.publishedCount).toBe(3);
     expect(october21).toMatchObject({ count: 2, maxViews: 12000, level: 4 });
     expect(october22).toMatchObject({ count: 1, maxViews: 3000, level: 1 });
+  });
+});
+
+describe("calendarYearOptions", () => {
+  it("offers data-bearing years only when the library spans over one year", () => {
+    const videos = [
+      video("2024-02-01T03:00:00Z"),
+      video("2025-04-01T03:00:00Z"),
+      video("2026-10-21T03:00:00Z"),
+    ];
+
+    expect(
+      calendarYearOptions("2024-01-01", "2025-01-01", videos),
+    ).toEqual([]);
+    expect(
+      calendarYearOptions("2024-01-01", "2026-10-21", videos),
+    ).toEqual([2026, 2025, 2024]);
+  });
+});
+
+describe("buildPublishCalendarSummary", () => {
+  it("summarizes only the selected date range", () => {
+    const summary = buildPublishCalendarSummary(
+      "2026-01-01",
+      "2026-12-31",
+      [
+        video("2026-01-05T03:00:00Z", 100),
+        video("2026-01-15T03:00:00Z", 200),
+        video("2026-03-01T03:00:00Z", 50),
+        video("2025-12-31T03:00:00Z", 900),
+      ],
+      new Date("2026-10-27T00:00:00Z"),
+    );
+
+    expect(summary).toMatchObject({
+      publishedCount: 3,
+      activeDays: 3,
+      longestGapDays: 45,
+      busiestMonth: { month: "2026-01", count: 2 },
+      totalViews: 350,
+      throughDate: "2026-10-27",
+    });
+    expect(summary?.topVideo?.stats.views).toBe(200);
+    expect(summary?.topVideos.map((item) => item.stats.views)).toEqual([
+      200,
+      100,
+      50,
+    ]);
+    expect(summary?.averagePerMonth).toBeCloseTo(0.3);
   });
 });

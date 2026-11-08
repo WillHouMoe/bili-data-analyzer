@@ -4,10 +4,10 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import app.models  # noqa: F401
-from app.api.videos import list_videos
+from app.api.videos import get_video, list_videos
 from app.core.database import Base
 from app.main import app
-from app.models import Query, QueryVideo, User, Video, VideoStats
+from app.models import Query, QueryVideo, RankingEntry, User, Video, VideoStats
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -35,9 +35,30 @@ async def _seed_query_videos(session) -> int:
     await session.flush()
 
     session.add_all([
-        Video(bvid="BVTOP", uid=1, title="Top video", duration=30, tags="music,clip"),
-        Video(bvid="BVTUTOR", uid=1, title="Tutorial basics", duration=600, tags="guide,starter"),
-        Video(bvid="BVLONG", uid=1, title="Other entry", duration=7200, tags="archive,longform"),
+        Video(
+            bvid="BVTOP",
+            uid=1,
+            title="Top video",
+            duration=30,
+            tags="music,clip",
+            published_at=datetime(2026, 3, 30),
+        ),
+        Video(
+            bvid="BVTUTOR",
+            uid=1,
+            title="Tutorial basics",
+            duration=600,
+            tags="guide,starter",
+            published_at=datetime(2026, 3, 20),
+        ),
+        Video(
+            bvid="BVLONG",
+            uid=1,
+            title="Other entry",
+            duration=7200,
+            tags="archive,longform",
+            published_at=datetime(2026, 3, 10),
+        ),
     ])
     session.add_all([
         QueryVideo(query_id=query.id, bvid="BVTOP"),
@@ -71,6 +92,72 @@ async def test_list_videos_sorts_by_duration_desc(session_factory):
         )
 
     assert [item.bvid for item in result.items] == ["BVLONG", "BVTUTOR", "BVTOP"]
+
+
+@pytest.mark.asyncio
+async def test_list_videos_defaults_to_newest_first(session_factory):
+    async with session_factory() as session:
+        query_id = await _seed_query_videos(session)
+
+        result = await list_videos(
+            query_id=query_id,
+            page=1,
+            page_size=10,
+            search="",
+            db=session,
+        )
+
+    assert [item.bvid for item in result.items] == ["BVTOP", "BVTUTOR", "BVLONG"]
+
+
+@pytest.mark.asyncio
+async def test_video_achievements_only_use_weekly_and_historical_high_rank(
+    session_factory,
+):
+    async with session_factory() as session:
+        await _seed_query_videos(session)
+        session.add_all(
+            [
+                RankingEntry(
+                    kind="weekly",
+                    period="weekly-396",
+                    period_name="第396期每周必看",
+                    rank=0,
+                    bvid="BVTOP",
+                    title="Top video",
+                    owner_uid=1,
+                    owner_name="Roxy",
+                ),
+                RankingEntry(
+                    kind="highest",
+                    period="all-time",
+                    period_name="全站排行榜最高第1名",
+                    rank=1,
+                    bvid="BVTOP",
+                    title="Top video",
+                    owner_uid=1,
+                    owner_name="Roxy",
+                ),
+                RankingEntry(
+                    kind="popular",
+                    period="2026-10-27",
+                    period_name="Current chart",
+                    rank=3,
+                    bvid="BVTOP",
+                    title="Top video",
+                    owner_uid=1,
+                    owner_name="Roxy",
+                ),
+            ]
+        )
+        await session.commit()
+
+        detail = await get_video("BVTOP", session)
+
+    assert {(item.kind, item.rank) for item in detail.rankings} == {
+        ("weekly", None),
+        ("highest", 1),
+    }
 
 
 @pytest.mark.asyncio

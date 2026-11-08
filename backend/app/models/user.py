@@ -24,3 +24,11 @@ class User(Base):
     refresh_progress: Mapped[str | None] = mapped_column(Text, nullable=True)
     refresh_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     refresh_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_video_scan_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    video_scan_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )

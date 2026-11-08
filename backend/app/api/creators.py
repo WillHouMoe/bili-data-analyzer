@@ -1,6 +1,6 @@
 import math
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import Query as QueryParam
@@ -46,6 +46,11 @@ from app.services.fetch_credentials import (
 )
 from app.services.growth import creator_growth
 from app.services.stats_refresh import run_stats_refresh
+from app.services.video_comparison import build_video_comparison
+from app.services.video_maintenance import (
+    get_maintenance_mode,
+    video_is_maintained,
+)
 
 router = APIRouter()
 
@@ -76,29 +81,38 @@ async def get_creator(uid: int, db: AsyncSession = Depends(get_db)):
     ranking_rows = (
         await db.execute(
             select(RankingEntry)
-            .where(RankingEntry.owner_uid == uid)
+            .where(
+                RankingEntry.owner_uid == uid,
+                RankingEntry.kind.in_(("weekly", "highest")),
+                RankingEntry.bvid.in_(list(snapshot.videos)),
+            )
             .order_by(RankingEntry.fetched_at.desc(), RankingEntry.rank)
         )
     ).scalars().all()
-    seen_rankings: set[tuple[str, str]] = set()
+    seen_rankings: set[tuple[str, str, str]] = set()
     rankings: list[RankingMatch] = []
     for entry in ranking_rows:
-        key = (entry.kind, entry.bvid)
+        key = (
+            entry.kind,
+            entry.period if entry.kind == "weekly" else "",
+            entry.bvid,
+        )
         if key in seen_rankings:
             continue
         seen_rankings.add(key)
+        latest_video = snapshot.videos.get(entry.bvid)
         rankings.append(
             RankingMatch(
                 kind=entry.kind,
                 period=entry.period,
                 period_name=entry.period_name,
-                rank=entry.rank,
+                rank=entry.rank if entry.kind in {"popular", "highest"} else None,
                 bvid=entry.bvid,
                 title=entry.title,
-                views=entry.views,
-                likes=entry.likes,
+                views=latest_video[1].views if latest_video else entry.views,
+                likes=latest_video[1].likes if latest_video else entry.likes,
                 fetched_at=entry.fetched_at,
-                in_library=entry.bvid in snapshot.videos,
+                in_library=True,
             )
         )
     return CreatorDetail(
@@ -109,7 +123,7 @@ async def get_creator(uid: int, db: AsyncSession = Depends(get_db)):
         total_shares=snapshot.total_shares,
         total_danmaku=snapshot.total_danmaku,
         total_comments=snapshot.total_comments,
-        rankings=rankings[:30],
+        rankings=rankings[:200],
     )
 
 
@@ -207,7 +221,7 @@ async def delete_creator(uid: int, db: AsyncSession = Depends(get_db)):
 @router.get("/creators/{uid}/videos", response_model=PaginatedVideos)
 async def list_creator_videos(
     uid: int,
-    sort_by: str = "views",
+    sort_by: str = "published_at",
     order: str = "desc",
     page: int = QueryParam(default=1, ge=1),
     page_size: int = QueryParam(default=20, le=100),
@@ -216,6 +230,7 @@ async def list_creator_videos(
 ):
     if not await db.get(User, uid):
         raise HTTPException(status_code=404, detail="Creator not found")
+    mode = await get_maintenance_mode(db)
     latest = await latest_videos_for_creator(db, uid)
     items = list(latest.values())
 
@@ -262,6 +277,11 @@ async def list_creator_videos(
                 duration=video.duration,
                 published_at=video.published_at,
                 tags=video.tags,
+                is_maintained=video_is_maintained(
+                    video,
+                    mode,
+                    datetime.now(UTC),
+                ),
                 stats=_stats_to_schema(stats),
             )
             for video, stats in page_items
@@ -380,7 +400,7 @@ async def refresh_creator_stats(uid: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="SESSDATA is not configured")
 
     user.refresh_status = "pending"
-    user.refresh_progress = "Queued to capture a new stats snapshot"
+    user.refresh_progress = "Queued to refresh due statistics"
     user.refresh_error = None
     user.refresh_retry_at = None
     await db.commit()
@@ -431,37 +451,15 @@ async def creator_video_comparison(
     bvid: str,
     db: AsyncSession = Depends(get_db),
 ):
-    # Kept in sync with the query-scoped endpoint's response while accepting
-    # creator scope instead of requiring one particular fetch batch.
     latest = await latest_videos_for_creator(db, uid)
     target = latest.get(bvid)
     if target is None:
         raise HTTPException(status_code=404, detail="Video not found in creator library")
 
-    metrics = [
-        "views", "likes", "coins", "favorites",
-        "shares", "danmaku_count", "comment_count",
-    ]
-    labels = ["views", "likes", "coins", "favorites", "shares", "danmaku", "comments"]
-    values = list(latest.values())
-    count = len(values)
-    target_stats = target[1]
-    video_values = [float(getattr(target_stats, metric)) for metric in metrics]
-    averages = [
-        sum(getattr(stats, metric) for _, stats in values) / count
-        for metric in metrics
-    ]
-    maximums = [
-        max(getattr(stats, metric) for _, stats in values)
-        for metric in metrics
-    ]
-    return {
-        "metrics": labels,
-        "video_values": video_values,
-        "average_values": [round(value, 1) for value in averages],
-        "max_values": [round(value, 1) for value in maximums],
-        "percentage_diff": [
-            round((value - average) / average * 100, 1) if average > 0 else 0.0
-            for value, average in zip(video_values, averages)
-        ],
-    }
+    comparison = build_video_comparison(target[0], target[1], list(latest.values()))
+    if comparison is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Not enough earlier videos for a local comparison",
+        )
+    return comparison

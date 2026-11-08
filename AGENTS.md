@@ -27,7 +27,7 @@ hard requirement (anonymous calls get HTTP 412).
 
 ## Conventions
 
-- Docs: English and zh-Hant mirrors (`README.md` / `README.zh-Hant.md`) — change both.
+- Docs: English and Simplified Chinese mirrors (`README.md` / `README.zh-CN.md`) — change both.
 - `frontend/.npmrc` sets `legacy-peer-deps=true` to paper over vite 8 / react 19 /
   eslint 9 peer conflicts; do not treat that as a clean bill of health when bumping deps.
 - Commits: Conventional Commits, English.

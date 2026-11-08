@@ -107,6 +107,12 @@ function VideoEntry({
                 {video.published_at.slice(0, 10)}
               </>
             )}
+            {!video.is_maintained && (
+              <>
+                <span className="text-ink-3">{SEP}</span>
+                <span className="text-mark">{t("video.notMaintainedShort")}</span>
+              </>
+            )}
           </p>
           {tags.length > 0 && (
             <p className="mt-0.5 truncate text-colophon tracking-normal text-ink-3">
@@ -168,7 +174,7 @@ export default function VideoList({ creatorId }: { creatorId: number }) {
   const { t } = useTranslation();
   const [result, setResult] = useState<PaginatedVideos | null>(null);
   const [resolvedKey, setResolvedKey] = useState("");
-  const [sortBy, setSortBy] = useState<SortField>("views");
+  const [sortBy, setSortBy] = useState<SortField>("published_at");
   const [order, setOrder] = useState<"desc" | "asc">("desc");
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");

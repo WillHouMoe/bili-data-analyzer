@@ -15,6 +15,11 @@ from app.schemas.settings import (
     SettingsUpdate,
 )
 from app.services.bilibili import BilibiliClient
+from app.services.video_maintenance import (
+    MAINTENANCE_MODE_KEY,
+    ensure_video_refresh_schedules,
+    get_maintenance_mode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +38,7 @@ DEFAULTS = {
     "ai_api_key": "",
     "ai_model": "gpt-4o",
     "proxy_list": "",
-    "refresh_window_size": "40",
+    MAINTENANCE_MODE_KEY: "windowed",
 }
 
 
@@ -75,14 +80,6 @@ async def _get_raw_setting(db: AsyncSession, key: str) -> str:
     return row.value
 
 
-async def _get_refresh_window_size(db: AsyncSession) -> int:
-    try:
-        value = int(await _get_setting(db, "refresh_window_size"))
-    except (TypeError, ValueError):
-        value = 40
-    return min(50, max(30, value))
-
-
 @router.get("/settings", response_model=SettingsResponse)
 async def get_settings(db: AsyncSession = Depends(get_db)):
     return SettingsResponse(
@@ -91,7 +88,7 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
         ai_api_key=await _get_setting(db, "ai_api_key"),
         ai_model=await _get_setting(db, "ai_model"),
         proxy_list=await _get_setting(db, "proxy_list"),
-        refresh_window_size=await _get_refresh_window_size(db),
+        maintenance_mode=await get_maintenance_mode(db),
     )
 
 
@@ -107,12 +104,13 @@ async def update_settings(data: SettingsUpdate, db: AsyncSession = Depends(get_d
         await _set_setting(db, "ai_model", data.ai_model)
     if data.proxy_list is not None:
         await _set_setting(db, "proxy_list", data.proxy_list)
-    if data.refresh_window_size is not None:
+    if data.maintenance_mode is not None:
         await _set_setting(
             db,
-            "refresh_window_size",
-            str(data.refresh_window_size),
+            MAINTENANCE_MODE_KEY,
+            data.maintenance_mode,
         )
+        await ensure_video_refresh_schedules(db)
     await db.commit()
     return await get_settings(db)
 

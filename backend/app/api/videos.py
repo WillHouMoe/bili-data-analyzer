@@ -1,5 +1,5 @@
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import Query as QueryParam
@@ -17,6 +17,10 @@ from app.schemas.video import (
     VideoSummary,
 )
 from app.services.growth import video_growth
+from app.services.video_maintenance import (
+    get_maintenance_mode,
+    video_is_maintained,
+)
 
 router = APIRouter()
 
@@ -50,7 +54,7 @@ VIDEO_SORT_FIELDS = {"published_at", "duration"}
 @router.get("/queries/{query_id}/videos", response_model=PaginatedVideos)
 async def list_videos(
     query_id: int,
-    sort_by: str = "views",
+    sort_by: str = "published_at",
     order: str = "desc",
     page: int = QueryParam(default=1, ge=1),
     page_size: int = QueryParam(default=20, le=100),
@@ -58,6 +62,7 @@ async def list_videos(
     db: AsyncSession = Depends(get_db),
 ):
     search_text = search.strip()
+    mode = await get_maintenance_mode(db)
 
     # Build query: join Video + latest VideoStats via QueryVideo
     base = (
@@ -107,7 +112,13 @@ async def list_videos(
             VideoSummary(
                 bvid=v.bvid, title=v.title, cover_url=v.cover_url,
                 duration=v.duration, published_at=v.published_at,
-                tags=v.tags, stats=_stats_to_schema(s),
+                tags=v.tags,
+                is_maintained=video_is_maintained(
+                    v,
+                    mode,
+                    datetime.now(UTC),
+                ),
+                stats=_stats_to_schema(s),
             )
             for v, s in page_items
         ],
@@ -120,6 +131,7 @@ async def get_video(bvid: str, db: AsyncSession = Depends(get_db)):
     video = await db.get(Video, bvid)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    mode = await get_maintenance_mode(db)
 
     stats_result = await db.execute(
         select(VideoStats).where(VideoStats.bvid == bvid).order_by(VideoStats.fetched_at.desc()).limit(1)
@@ -131,26 +143,34 @@ async def get_video(bvid: str, db: AsyncSession = Depends(get_db)):
     ranking_rows = (
         await db.execute(
             select(RankingEntry)
-            .where(RankingEntry.bvid == bvid)
+            .where(
+                RankingEntry.bvid == bvid,
+                RankingEntry.kind.in_(("weekly", "highest")),
+            )
             .order_by(RankingEntry.fetched_at.desc(), RankingEntry.rank)
         )
     ).scalars().all()
-    seen_kinds: set[str] = set()
+    seen_achievements: set[tuple[str, str, str]] = set()
     rankings: list[RankingMatch] = []
     for entry in ranking_rows:
-        if entry.kind in seen_kinds:
+        key = (
+            entry.kind,
+            entry.period if entry.kind == "weekly" else "",
+            entry.bvid,
+        )
+        if key in seen_achievements:
             continue
-        seen_kinds.add(entry.kind)
+        seen_achievements.add(key)
         rankings.append(
             RankingMatch(
                 kind=entry.kind,
                 period=entry.period,
                 period_name=entry.period_name,
-                rank=entry.rank,
+                rank=entry.rank if entry.kind in {"popular", "highest"} else None,
                 bvid=entry.bvid,
                 title=entry.title,
-                views=entry.views,
-                likes=entry.likes,
+                views=stats.views,
+                likes=stats.likes,
                 fetched_at=entry.fetched_at,
                 in_library=True,
             )
@@ -160,6 +180,11 @@ async def get_video(bvid: str, db: AsyncSession = Depends(get_db)):
         bvid=video.bvid, title=video.title, description=video.description,
         cover_url=video.cover_url, duration=video.duration,
         published_at=video.published_at, tags=video.tags,
+        is_maintained=video_is_maintained(
+            video,
+            mode,
+            datetime.now(UTC),
+        ),
         stats=_stats_to_schema(stats),
         rankings=rankings,
     )

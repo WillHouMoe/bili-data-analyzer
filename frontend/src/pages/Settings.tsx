@@ -109,7 +109,9 @@ export default function Settings() {
 
   const [sessdata, setSessdata] = useState(MASK);
   const [proxyList, setProxyList] = useState("");
-  const [refreshWindowSize, setRefreshWindowSize] = useState(40);
+  const [maintenanceMode, setMaintenanceMode] = useState<"windowed" | "unlimited">(
+    "windowed",
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -127,7 +129,7 @@ export default function Settings() {
       .then((s) => {
         setSessdata(s.sessdata ? MASK : "");
         setProxyList(s.proxy_list || "");
-        setRefreshWindowSize(s.refresh_window_size || 40);
+        setMaintenanceMode(s.maintenance_mode || "windowed");
       })
       .catch(() => {
         // Keep defaults; saving still works.
@@ -142,7 +144,7 @@ export default function Settings() {
     try {
       const payload: Record<string, string | number> = {
         proxy_list: proxyList,
-        refresh_window_size: refreshWindowSize,
+        maintenance_mode: maintenanceMode,
       };
       if (sessdata !== MASK) payload.sessdata = sessdata;
 
@@ -229,23 +231,33 @@ export default function Settings() {
           </SpecRow>
 
           <SpecRow
-            label={t("settings.refreshWindow")}
-            help={t("settings.refreshWindowHelp")}
+            label={t("settings.videoMaintenance")}
+            help={t("settings.videoMaintenanceHelp")}
           >
-            <Input
-              type="number"
-              min={30}
-              max={50}
-              value={refreshWindowSize}
-              onChange={(e) => {
-                const next = Number(e.target.value);
-                if (Number.isFinite(next)) {
-                  setRefreshWindowSize(Math.min(50, Math.max(30, next)));
+            <ToggleGroup
+              value={[maintenanceMode]}
+              onValueChange={(vals: string[]) => {
+                if (vals.length) {
+                  setMaintenanceMode(vals[0] as "windowed" | "unlimited");
                 }
               }}
-              aria-label={t("settings.refreshWindow")}
-              className="w-28 tabular-nums"
-            />
+              variant="outline"
+            >
+              <ToggleGroupItem value="windowed">
+                {t("settings.maintenanceWindowed")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="unlimited">
+                {t("settings.maintenanceUnlimited")}
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <p className="text-note leading-relaxed text-ink-3">
+              {maintenanceMode === "windowed"
+                ? t("settings.maintenanceWindowedHelp")
+                : t("settings.maintenanceUnlimitedHelp")}
+            </p>
+            <p className="text-note leading-relaxed text-ink-3">
+              {t("settings.maintenanceSchedule")}
+            </p>
           </SpecRow>
 
           <SpecRow label={t("settings.appearance")}>

@@ -5,11 +5,11 @@ import { api } from "@/lib/api";
 import {
   categoryAxis,
   chartBase,
-  compactNumber,
   useChartTokens,
   valueAxis,
 } from "@/lib/chart-theme";
 import { formatExact } from "@/lib/format";
+import { autoScaleRange, scaledNumber } from "@/lib/chart-scale";
 import { toTimedSeries } from "@/lib/time-series";
 import { Inking, NoInk } from "@/components/proof/States";
 import type { VideoGrowth } from "@/types";
@@ -53,62 +53,68 @@ export default function VideoGrowthChart({ bvid }: { bvid: string }) {
   );
 
   const option = useMemo(
-    () => ({
-      ...chartBase(k),
-      tooltip: {
-        ...chartBase(k).tooltip,
-        trigger: "axis",
-        formatter: (params: { dataIndex: number }[]) => {
-          const point = points[params[0]?.dataIndex ?? -1];
-          if (!point) return "";
-          return [
-            timeFormatter.format(new Date(point.fetched_at)),
-            `${t("stats.totalViews")} ${formatExact(point.views, i18n.language)}`,
-            `${t("stats.likes")} ${formatExact(point.likes, i18n.language)}`,
-            `${t("stats.interactionRate")} ${point.interaction_rate.toFixed(2)}%`,
-          ].join("<br/>");
+    () => {
+      const range = autoScaleRange(points.map((point) => point.views));
+      const span = range.max - range.min;
+      return {
+        ...chartBase(k),
+        tooltip: {
+          ...chartBase(k).tooltip,
+          trigger: "axis",
+          formatter: (params: { dataIndex: number }[]) => {
+            const point = points[params[0]?.dataIndex ?? -1];
+            if (!point) return "";
+            return [
+              timeFormatter.format(new Date(point.fetched_at)),
+              `${t("stats.totalViews")} ${formatExact(point.views, i18n.language)}`,
+              `${t("stats.likes")} ${formatExact(point.likes, i18n.language)}`,
+              `${t("stats.interactionRate")} ${point.interaction_rate.toFixed(2)}%`,
+            ].join("<br/>");
+          },
         },
-      },
-      grid: { left: 4, right: 16, top: 22, bottom: 6, containLabel: true },
-      xAxis: {
-        ...categoryAxis(k),
-        type: "time",
-        boundaryGap: false,
-        axisLabel: {
-          color: k.ink3,
-          fontSize: 10,
-          fontFamily: k.font,
-          hideOverlap: true,
-          formatter: (value: number) =>
-            timeFormatter.format(new Date(value)),
+        grid: { left: 4, right: 16, top: 22, bottom: 6, containLabel: true },
+        xAxis: {
+          ...categoryAxis(k),
+          type: "time",
+          boundaryGap: false,
+          axisLabel: {
+            color: k.ink3,
+            fontSize: 10,
+            fontFamily: k.font,
+            hideOverlap: true,
+            formatter: (value: number) =>
+              timeFormatter.format(new Date(value)),
+          },
         },
-      },
-      yAxis: valueAxis(k, {
-        axisLabel: {
-          color: k.ink3,
-          fontSize: 10,
-          fontFamily: k.font,
-          formatter: (value: number) => compactNumber(value),
-        },
-      }),
-      series: [
-        {
-          name: t("stats.totalViews"),
-          type: "line",
-          data: toTimedSeries(
-            points,
-            (point) => point.fetched_at,
-            (point) => point.views,
-          ),
-          smooth: false,
-          symbol: "circle",
-          symbolSize: 5,
-          lineStyle: { color: k.mark, width: 1.8 },
-          itemStyle: { color: k.mark },
-          areaStyle: { color: k.mark, opacity: 0.08 },
-        },
-      ],
-    }),
+        yAxis: valueAxis(k, {
+          min: range.min,
+          max: range.max,
+          axisLabel: {
+            color: k.ink3,
+            fontSize: 10,
+            fontFamily: k.font,
+            formatter: (value: number) => scaledNumber(value, span),
+          },
+        }),
+        series: [
+          {
+            name: t("stats.totalViews"),
+            type: "line",
+            data: toTimedSeries(
+              points,
+              (point) => point.fetched_at,
+              (point) => point.views,
+            ),
+            smooth: false,
+            symbol: "circle",
+            symbolSize: 5,
+            lineStyle: { color: k.mark, width: 1.8 },
+            itemStyle: { color: k.mark },
+            areaStyle: { color: k.mark, opacity: 0.08 },
+          },
+        ],
+      };
+    },
     [points, k, t, i18n.language, timeFormatter],
   );
 

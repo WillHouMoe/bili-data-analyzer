@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { chartBase, categoryAxis, useChartTokens, compactNumber } from "@/lib/chart-theme";
 import { formatExact } from "@/lib/format";
+import { autoScaleRange } from "@/lib/chart-scale";
 import { Inking, NoInk } from "@/components/proof/States";
 import type { TrendPoint } from "@/types";
 
@@ -44,6 +45,7 @@ export default function ViewsTrendChart({
   );
 
   const option = useMemo(() => {
+    const yRange = autoScaleRange(data.map((point) => point.views));
     return {
       ...chartBase(k),
       tooltip: {
@@ -60,7 +62,16 @@ export default function ViewsTrendChart({
       }),
       // No scale furniture: the line is the record, the ledger carries totals
       // and the peak prints its own figure.
-      yAxis: { type: "value", show: true, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } },
+      yAxis: {
+        type: "value",
+        show: true,
+        min: yRange.min,
+        max: yRange.max,
+        axisLabel: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+      },
       series: [
         {
           name: t("chart.viewsTrend"),

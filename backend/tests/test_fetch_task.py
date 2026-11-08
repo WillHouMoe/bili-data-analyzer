@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import app.models  # noqa: F401
 from app.core.database import Base
-from app.models import AppSettings, Query, QueryVideo, User, Video, VideoStats
+from app.models import Query, QueryVideo, User, Video, VideoStats
 from app.services import fetch_task, stats_refresh
 
 VIDEO_DATE = date(2026, 10, 15)
@@ -49,7 +49,7 @@ class FakeBilibiliClient:
     async def get_video_index_in_range(self, uid, start_date, end_date):
         return {"videos": [{"bvid": "BVFETCH1", "published_ts": VIDEO_TS}]}
 
-    async def get_video_detail(self, bvid):
+    async def get_video_detail(self, bvid, *, include_tags=True):
         type(self).detail_calls += 1
         return {
             "bvid": bvid,
@@ -275,21 +275,30 @@ async def test_stats_refresh_captures_new_snapshot_for_existing_video(
 
 
 @pytest.mark.asyncio
-async def test_stats_refresh_respects_configured_recent_video_window(
+async def test_stats_refresh_skips_videos_outside_the_default_year_window(
     monkeypatch, fk_session_factory
 ):
+    now = datetime.now(UTC)
     async with fk_session_factory() as db:
         db.add(User(uid=946974, name="Test Creator"))
-        db.add(AppSettings(key="refresh_window_size", value="30"))
-        for index in range(35):
-            db.add(
+        db.add_all(
+            [
                 Video(
-                    bvid=f"BVWINDOW{index:02d}",
+                    bvid="BVACTIVE",
                     uid=946974,
-                    title=f"Video {index}",
-                    published_at=datetime(2026, 10, 1, 12) + timedelta(days=index),
-                )
-            )
+                    title="Active video",
+                    published_at=now - timedelta(days=2),
+                    next_stats_refresh_at=now - timedelta(minutes=1),
+                ),
+                Video(
+                    bvid="BVRETIRED",
+                    uid=946974,
+                    title="Retired video",
+                    published_at=now - timedelta(days=400),
+                    next_stats_refresh_at=now - timedelta(days=1),
+                ),
+            ]
+        )
         await db.commit()
 
     monkeypatch.setattr(stats_refresh, "async_session", fk_session_factory)
@@ -297,11 +306,63 @@ async def test_stats_refresh_respects_configured_recent_video_window(
     await stats_refresh.run_stats_refresh(946974, sessdata="test")
 
     async with fk_session_factory() as db:
-        stats_count = (
-            await db.execute(select(func.count()).select_from(VideoStats))
-        ).scalar_one()
+        refreshed = (
+            await db.execute(
+                select(VideoStats.bvid).order_by(VideoStats.bvid)
+            )
+        ).scalars().all()
 
-    assert stats_count == 30
+    assert refreshed == ["BVACTIVE"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_due_videos_samples_oldest_active_video(
+    monkeypatch, fk_session_factory
+):
+    now = datetime.now(UTC)
+    async with fk_session_factory() as db:
+        db.add(User(uid=946974, name="Test Creator"))
+        db.add_all(
+            [
+                Video(
+                    bvid="BVDUE",
+                    uid=946974,
+                    title="Due",
+                    published_at=now - timedelta(days=2),
+                    next_stats_refresh_at=now - timedelta(hours=1),
+                ),
+                Video(
+                    bvid="BVFUTURE",
+                    uid=946974,
+                    title="Future",
+                    published_at=now - timedelta(days=2),
+                    next_stats_refresh_at=now + timedelta(hours=1),
+                ),
+            ]
+        )
+        await db.commit()
+
+    async def fake_credentials(_db):
+        return "sessdata", []
+
+    monkeypatch.setattr(stats_refresh, "async_session", fk_session_factory)
+    monkeypatch.setattr(stats_refresh, "BilibiliClient", FakeBilibiliClient)
+    monkeypatch.setattr(
+        stats_refresh,
+        "load_fetch_credentials",
+        fake_credentials,
+    )
+
+    assert await stats_refresh.refresh_due_videos() == 1
+
+    async with fk_session_factory() as db:
+        refreshed = (
+            await db.execute(select(VideoStats.bvid))
+        ).scalars().all()
+        video = await db.get(Video, "BVDUE")
+
+    assert refreshed == ["BVDUE"]
+    assert video.next_stats_refresh_at is not None
 
 
 @pytest.mark.asyncio
@@ -327,7 +388,11 @@ async def test_refresh_one_due_creator_selects_stale_library(
         "load_fetch_credentials",
         fake_credentials,
     )
-    monkeypatch.setattr(stats_refresh, "run_stats_refresh", fake_refresh)
+    monkeypatch.setattr(
+        stats_refresh,
+        "run_creator_profile_refresh",
+        fake_refresh,
+    )
 
     refreshed = await stats_refresh.refresh_one_due_creator()
 
@@ -377,7 +442,11 @@ async def test_refresh_due_creators_catches_up_every_overdue_library(
         "load_fetch_credentials",
         fake_credentials,
     )
-    monkeypatch.setattr(stats_refresh, "run_stats_refresh", fake_refresh)
+    monkeypatch.setattr(
+        stats_refresh,
+        "run_creator_profile_refresh",
+        fake_refresh,
+    )
 
     refreshed = await stats_refresh.refresh_due_creators()
 
@@ -424,7 +493,11 @@ async def test_refresh_retry_cooldown_does_not_starve_other_creators(
         "load_fetch_credentials",
         fake_credentials,
     )
-    monkeypatch.setattr(stats_refresh, "run_stats_refresh", fake_refresh)
+    monkeypatch.setattr(
+        stats_refresh,
+        "run_creator_profile_refresh",
+        fake_refresh,
+    )
 
     assert await stats_refresh.refresh_one_due_creator() is True
     assert calls == [2]

@@ -8,7 +8,7 @@ posted in a window of time, how it performed, and how those figures accumulated.
   <a href="LICENSE"><img src="https://img.shields.io/github/license/WillHouMoe/bili-data-analyzer" alt="License: MIT"></a>
 </p>
 
-**English** · [繁體中文](README.zh-Hant.md)
+**English** · [简体中文](README.zh-CN.md)
 
 Bilibili's creator centre shows totals and trend lines for your own account
 only. BiliDataAnalyzer answers broader questions across a creator's recent
@@ -74,30 +74,43 @@ performance figures. Pass `--reset` to start over.
    views-vs-engagement scatter, duration analysis, and publishing cadence. The
    creator is the directory; individual fetches are batches underneath it.
    Account-wide followers, total views and total likes come from Bilibili's
-   creator APIs. The latest 30–50 videos are refreshed for performance snapshots,
-   while follower, account-view and account-like history is stored as separate
-   creator snapshots and shown as two side-by-side charts: followers on the
-   left, and account views plus likes on the right.
+   creator APIs. Video snapshots follow the age of each upload, while follower,
+   account-view and account-like history is stored as separate creator
+   snapshots and shown as two side-by-side charts: followers on the left, and
+   account views plus likes on the right. Publishing calendars switch by year
+   when the library spans more than one year, with an annual summary alongside
+   the calendar.
 3. **Video detail** — one video's numbers with a radar chart and deltas against
-   the creator's merged video library.
+   a local cohort: up to 20 earlier uploads from the preceding 180 days. The
+   radar uses percentile ranks and the bars compare with the cohort median,
+   avoiding the channel-growth bias of an all-time average.
 
 Use **Fetch another range** on a creator page to append more videos. Existing
 videos are reused by BV ID, so overlapping ranges do not scrape the whole
-catalogue again.
+catalogue again. Once a creator is in the library, the background worker also
+checks their newest uploads and creates unseen videos automatically.
 
-**Capture snapshot** records the current stats for every video already in the
-creator library. By default it updates only the most recent 40 videos; change
-the 30–50 video window in Settings. These snapshots feed the creator growth
-curve by video age and the per-video view history chart. By default the server
-also captures one automatically every 24 hours; change
-`STATS_REFRESH_HOURS` or set it to `0` to use manual snapshots only. After
-downtime, startup immediately drains every overdue creator rather than waiting
-for the next periodic check. Missed timestamps cannot be reconstructed, so the
-first post-downtime snapshot is recorded at the actual restart time.
+**Refresh due data** captures the creator totals and videos whose next snapshot
+is due. Maintenance is based on publication age rather than video count:
+hourly for the first day, every 2 hours through day 3, every 4 hours through
+day 7, every 8 hours through day 14, every 12 hours through day 30, and daily
+through day 365. The default one-year window stops automatic maintenance after
+that point; unlimited mode continues weekly. A playback spike or a new ranking
+placement temporarily moves the next sample one tier earlier for up to six
+observations.
 
-The same background refresh stores Bilibili's site-wide ranking and the latest
-weekly must-watch list. Matching placements appear on creator dashboards and
-video detail pages.
+These snapshots feed the creator growth curve by video age and the per-video
+view history chart. Creator totals are captured every 24 hours by default;
+change `STATS_REFRESH_HOURS` or set it to `0` to use manual refreshes only.
+After downtime, the worker drains overdue videos across every creator rather
+than waiting for a fresh 24-hour cycle. Missed timestamps cannot be
+reconstructed, so the first post-downtime snapshot is recorded at the actual
+restart time.
+
+The background achievement pass reads each library video's retained
+`honor_reply`, including all weekly must-watch issues and its site-wide chart
+high-water mark. These long-lived achievements are grouped separately from the
+current chart on creator dashboards and video detail pages.
 
 **SESSDATA is required for scraping.** `x/web-interface/view`, which every
 video goes through, answers HTTP 412 to requests without a logged-in session —
@@ -134,7 +147,9 @@ against someone getting the `.db` file alone, not against host access.
 | `DATA_DIR` | `./data` | Holds the database and `.secret_key` |
 | `SECRET_KEY` | *(generated)* | Fernet key. Generated on first run and persisted; set it explicitly to keep stored credentials readable across environments |
 | `CORS_ORIGINS` | `http://localhost:5173` | Only needed for the split dev setup. Empty disables CORS entirely |
-| `STATS_REFRESH_HOURS` | `24` | Background stats snapshot interval in hours; `0` disables automatic snapshots |
+| `STATS_REFRESH_HOURS` | `24` | Creator account snapshot interval in hours; video sampling follows the age tiers above; `0` disables automatic snapshots |
+| `RANKING_REFRESH_MINUTES` | `15` | Independent site-wide ranking poll interval; changed positions queue their videos for achievement refreshes; `0` disables chart polling |
+| `NEW_VIDEO_REFRESH_MINUTES` | `30` | Scan tracked creators' newest uploads for videos not yet in the library; `0` disables automatic discovery |
 
 ## Local development
 

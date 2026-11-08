@@ -55,7 +55,7 @@ export interface VideoStats {
 export interface VideoSummary {
   bvid: string; title: string; cover_url: string | null;
   duration: number; published_at: string | null;
-  tags: string | null; stats: VideoStats;
+  tags: string | null; is_maintained: boolean; stats: VideoStats;
 }
 
 export interface VideoDetail extends VideoSummary {
@@ -64,10 +64,10 @@ export interface VideoDetail extends VideoSummary {
 }
 
 export interface RankingMatch {
-  kind: "popular" | "weekly";
+  kind: "popular" | "weekly" | "highest";
   period: string;
   period_name: string | null;
-  rank: number;
+  rank: number | null;
   bvid: string;
   title: string;
   views: number;
@@ -89,10 +89,18 @@ export interface StatsSummary {
 
 export interface TrendPoint { date: string; views: number; }
 export interface InteractionData { likes: number; coins: number; favorites: number; shares: number; }
+export interface ComparisonBaseline {
+  sample_size: number;
+  window_days: number;
+  published_from: string;
+  published_to: string;
+}
 export interface VideoComparison {
   metrics: string[]; video_values: number[];
-  average_values: number[]; percentage_diff: number[];
-  max_values: number[];
+  baseline_values: number[];
+  percentage_diff: Array<number | null>;
+  percentile_ranks: number[];
+  baseline: ComparisonBaseline;
 }
 
 export interface GrowthPoint {
@@ -151,7 +159,7 @@ export interface SettingsResponse {
   sessdata: string; ai_base_url: string;
   ai_api_key: string; ai_model: string;
   proxy_list: string;
-  refresh_window_size: number;
+  maintenance_mode: "windowed" | "unlimited";
 }
 
 // AI Conversation Types

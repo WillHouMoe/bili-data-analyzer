@@ -17,9 +17,9 @@ const METRIC_KEYS: Record<string, string> = {
 const SCALE = 200;
 
 /**
- * 增減欄 —— each metric read against the average, either side of a centre rule.
- * Above sits right in 朱批, below sits left in 藍鉛筆: direction is position
- * first and colour second, so it reads without either.
+ * 增減欄 —— each metric read against the local cohort median, either side of a
+ * centre rule. Above sits right in 朱批, below sits left in 藍鉛筆: direction is
+ * position first and colour second, so it reads without either.
  */
 export default function ComparisonBars({ data }: { data: VideoComparison | null }) {
   const { t } = useTranslation();
@@ -28,13 +28,20 @@ export default function ComparisonBars({ data }: { data: VideoComparison | null 
 
   return (
     <div className="flex flex-col">
+      <p className="colophon pb-1">
+        {t("video.baselineSummary", {
+          count: data.baseline.sample_size,
+          days: data.baseline.window_days,
+        })}
+      </p>
       <p className="colophon pb-2">{t("video.engagementTip")}</p>
 
       <ul className="border-t border-rule">
         {data.metrics.map((metric, i) => {
           const pct = data.percentage_diff[i];
-          const above = pct >= 0;
-          const width = Math.min(Math.abs(pct) / SCALE, 1) * 50;
+          const unavailable = pct === null;
+          const above = (pct ?? 0) >= 0;
+          const width = unavailable ? 0 : Math.min(Math.abs(pct) / SCALE, 1) * 50;
 
           return (
             <li
@@ -46,7 +53,7 @@ export default function ComparisonBars({ data }: { data: VideoComparison | null 
               </span>
 
               <span className="relative flex h-2.5 items-stretch bg-paper-2" aria-hidden>
-                {/* 中線：平均值就在這裡 */}
+                {/* 中線：同期中位數就在這裡 */}
                 <span className="absolute inset-y-[-3px] left-1/2 w-px -translate-x-1/2 bg-rule-2" />
                 <span
                   className={cn("absolute inset-y-0", above ? "bg-pos" : "bg-neg")}
@@ -61,11 +68,17 @@ export default function ComparisonBars({ data }: { data: VideoComparison | null 
               <span
                 className={cn(
                   "text-right text-note font-medium tabular-nums",
-                  above ? "text-pos" : "text-neg",
+                  unavailable ? "text-ink-3" : above ? "text-pos" : "text-neg",
                 )}
               >
-                {above ? "+" : "−"}
-                {Math.abs(pct).toFixed(1)}%
+                {unavailable ? (
+                  "—"
+                ) : (
+                  <>
+                    {above ? "+" : "−"}
+                    {Math.abs(pct).toFixed(1)}%
+                  </>
+                )}
               </span>
             </li>
           );
