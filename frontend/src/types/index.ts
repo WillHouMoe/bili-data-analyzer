@@ -155,6 +155,22 @@ export interface CreatorAccountGrowth {
   points: AccountGrowthPoint[];
 }
 
+export interface StaticSnapshot {
+  schema_version: number;
+  generated_at: string;
+  creators: CreatorSummary[];
+  creator_details: Record<string, CreatorDetail>;
+  creator_stats: Record<string, StatsSummary>;
+  creator_trends: Record<string, TrendPoint[]>;
+  creator_interactions: Record<string, InteractionData>;
+  creator_growth: Record<string, CreatorGrowth>;
+  creator_account_growth: Record<string, CreatorAccountGrowth>;
+  creator_videos: Record<string, VideoSummary[]>;
+  video_details: Record<string, VideoDetail>;
+  video_growth: Record<string, VideoGrowth>;
+  video_comparisons: Record<string, VideoComparison>;
+}
+
 export interface SettingsResponse {
   sessdata: string; ai_base_url: string;
   ai_api_key: string; ai_model: string;

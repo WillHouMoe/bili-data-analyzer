@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api } from "@/lib/api";
+import { api, isStaticMode } from "@/lib/api";
 import type {
   CreatorDetail,
   StatsSummary,
@@ -390,7 +390,7 @@ export default function Dashboard() {
         title={title}
         meta={mastheadMeta}
         actions={
-          detail ? (
+          detail && !isStaticMode ? (
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -554,11 +554,13 @@ export default function Dashboard() {
         creatorId={creatorId}
       />
 
-      <NewQueryDialog
-        open={appendOpen}
-        onOpenChange={setAppendOpen}
-        defaultUid={String(creatorId)}
-      />
+      {!isStaticMode && (
+        <NewQueryDialog
+          open={appendOpen}
+          onOpenChange={setAppendOpen}
+          defaultUid={String(creatorId)}
+        />
+      )}
     </>
   );
 }

@@ -67,6 +67,17 @@ wait_until_ready() {
   return 1
 }
 
+export_static() {
+  ensure_env
+  ensure_docker
+  mkdir -p frontend/public/static-data
+  docker compose run --rm --no-deps \
+    --volume "$ROOT:/workspace" \
+    app python /workspace/backend/scripts/export_static.py \
+    --database /workspace/data/bilianalyzer.db \
+    --output /workspace/frontend/public/static-data/snapshot.json
+}
+
 case "${1:-start}" in
   start)
     start
@@ -81,6 +92,9 @@ case "${1:-start}" in
     ;;
   logs)
     docker compose logs -f app
+    ;;
+  export-static)
+    export_static
     ;;
   restart)
     start
@@ -155,7 +169,7 @@ EOF
     echo "Removed login startup"
     ;;
   *)
-    echo "usage: ./bilia [start|open|status|logs|restart|stop|down|install-login|uninstall-login]" >&2
+    echo "usage: ./bilia [start|open|status|logs|export-static|restart|stop|down|install-login|uninstall-login]" >&2
     exit 2
     ;;
 esac

@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, isStaticMode } from "@/lib/api";
 import { formatCount } from "@/lib/format";
 import { useTheme } from "@/hooks/useTheme";
 import { CircleMark, DeleteMark } from "@/components/proof/marks";
@@ -53,10 +53,10 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
     }
 
     fetchCreators();
-    const id = setInterval(fetchCreators, 3000);
+    const id = isStaticMode ? null : window.setInterval(fetchCreators, 3000);
     return () => {
       active = false;
-      clearInterval(id);
+      if (id !== null) window.clearInterval(id);
     };
   }, []);
 
@@ -103,11 +103,13 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
           <p className="colophon mt-1.5">{t("app.tagline")}</p>
         </div>
 
-        <div className="px-4 py-3">
-          <Button variant="default" size="lg" className="w-full" onClick={() => setDialogOpen(true)}>
-            {t("app.addCreator")}
-          </Button>
-        </div>
+        {!isStaticMode && (
+          <div className="px-4 py-3">
+            <Button variant="default" size="lg" className="w-full" onClick={() => setDialogOpen(true)}>
+              {t("app.addCreator")}
+            </Button>
+          </div>
+        )}
 
         {/* 稿件目錄 */}
         <div className="flex min-h-0 flex-1 flex-col">
@@ -173,17 +175,19 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                         </p>
                       )}
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(creator);
-                      }}
-                      className="absolute top-2.5 right-2 p-1 text-ink-3 opacity-0 transition-opacity hover:text-mark focus-visible:opacity-100 group-hover:opacity-100"
-                      aria-label={t("sidebar.deleteCreator")}
-                    >
-                      <DeleteMark className="size-4" />
-                    </button>
+                    {!isStaticMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(creator);
+                        }}
+                        className="absolute top-2.5 right-2 p-1 text-ink-3 opacity-0 transition-opacity hover:text-mark focus-visible:opacity-100 group-hover:opacity-100"
+                        aria-label={t("sidebar.deleteCreator")}
+                      >
+                        <DeleteMark className="size-4" />
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -193,14 +197,16 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
         {/* 版邊控制 */}
         <div className="flex items-center gap-1 border-t border-rule-strong px-3 py-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => go("/settings")}
-            aria-label={t("settings.title")}
-          >
-            <SettingsIcon />
-          </Button>
+          {!isStaticMode && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => go("/settings")}
+              aria-label={t("settings.title")}
+            >
+              <SettingsIcon />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -221,7 +227,9 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
         </div>
       </aside>
 
-      <NewQueryDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      {!isStaticMode && (
+        <NewQueryDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      )}
 
       <Dialog
         open={!!deleteTarget}

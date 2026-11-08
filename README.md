@@ -131,13 +131,55 @@ SQLite, and the API returns them masked. The encryption key lives in
 `DATA_DIR/.secret_key` — beside the database it protects, so this defends
 against someone getting the `.db` file alone, not against host access.
 
+## Publish a read-only site with GitHub Pages
+
+The public site is a static snapshot. Your local instance remains the only
+writer: it scrapes, refreshes snapshots and stores credentials. Exporting uses
+the same response models as the API, then publishes only creator and video data
+needed by the dashboard; `app_settings`, AI conversations, credentials and the
+SQLite database never enter the static build.
+
+Export after the local app has collected the data you want to publish:
+
+```bash
+./bilia export-static
+```
+
+This writes `frontend/public/static-data/snapshot.json`. Commit that file and
+push it to either `main` or `simplify`. The
+[static Pages workflow](.github/workflows/pages.yml) verifies the snapshot,
+builds the frontend in read-only mode and deploys `frontend/dist`.
+
+In the GitHub repository, open **Settings → Pages** once and select **GitHub
+Actions** as the source. A project site is published at
+`https://<owner>.github.io/<repository>/`; the workflow derives that base path
+from the repository name.
+
+The static build hides creator addition, statistics refresh, deletion and
+Settings. Search, sorting and pagination run in the browser against the
+exported video library. The public site updates only when a new snapshot is
+committed and deployed; it does not scrape Bilibili or write data.
+
+To preview the static build locally:
+
+```bash
+cd frontend
+VITE_STATIC_MODE=true VITE_BASE_PATH=/ npm run build
+npm run preview
+```
+
+If you attach a custom domain to GitHub Pages, change `VITE_BASE_PATH` in
+`.github/workflows/pages.yml` to `/`. GitHub Pages sites are public, so export
+only data you intend to publish.
+
 ## Tech stack
 
 | Layer | |
 |---|---|
 | Frontend | Vite · React 19 · TypeScript · Tailwind CSS v4 · Base UI · ECharts |
 | Backend | FastAPI · SQLAlchemy 2.0 (async) · aiosqlite · httpx |
-| Deploy | Docker Compose, single multi-stage image |
+| Local deploy | Docker Compose, single multi-stage image |
+| Public read-only | GitHub Pages, sanitized JSON snapshot |
 
 ## Configuration
 

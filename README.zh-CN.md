@@ -65,13 +65,40 @@ docker compose exec app python -m scripts.seed_demo
 
 你的 SESSDATA 和 API 密钥在写入 SQLite 之前，会先用 Fernet 加密，API 返回时也会以掩码显示。加密密钥存放在 `DATA_DIR/.secret_key`——就在它所保护的数据库旁边，因此这只能防范有人单独获取 `.db` 文件，无法防范对主机的访问。
 
+## 用 GitHub Pages 发布只读网站
+
+公网网站是静态数据快照，本地实例始终是唯一的数据写入端：抓取、刷新快照和保存凭据都只在本地完成。导出器复用 API 的响应模型，只发布仪表板与视频页需要的 UP 主、视频和统计数据；`app_settings`、AI 会话、凭据和 SQLite 数据库都不会进入静态构建。
+
+本地收集好要公开的数据后运行：
+
+```bash
+./bilia export-static
+```
+
+这会生成 `frontend/public/static-data/snapshot.json`。提交该文件并推送到 `main` 或 `simplify`，[静态 Pages 工作流](.github/workflows/pages.yml) 会检查快照、以只读模式构建前端，并部署 `frontend/dist`。
+
+在 GitHub 仓库的 **Settings → Pages** 中首次选择 **GitHub Actions** 作为来源。项目站点会发布到 `https://<owner>.github.io/<repository>/`，工作流会根据仓库名自动设置子路径。
+
+静态版本会隐藏新增 UP 主、刷新统计、删除和 Settings 入口。搜索、排序和分页都在浏览器中基于导出的视频库完成。公网数据只会在提交并部署新快照后更新；它不会抓取 Bilibili，也不会写入数据。
+
+本地预览静态版本：
+
+```bash
+cd frontend
+VITE_STATIC_MODE=true VITE_BASE_PATH=/ npm run build
+npm run preview
+```
+
+如果为 GitHub Pages 绑定自定义域名，请将 `.github/workflows/pages.yml` 中的 `VITE_BASE_PATH` 改为 `/`。GitHub Pages 的内容是公开的，只应导出你准备公开的数据。
+
 ## 技术栈
 
 | 层级 | |
 |---|---|
 | 前端 | Vite · React 19 · TypeScript · Tailwind CSS v4 · Base UI · ECharts |
 | 后端 | FastAPI · SQLAlchemy 2.0（异步）· aiosqlite · httpx |
-| 部署 | Docker Compose，单一多阶段镜像 |
+| 本地部署 | Docker Compose，单一多阶段镜像 |
+| 公网只读 | GitHub Pages，脱敏 JSON 快照 |
 
 ## 配置
 

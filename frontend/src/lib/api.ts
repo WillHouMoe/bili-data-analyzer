@@ -1,8 +1,16 @@
 import type { CreatorDetail, CreatorSummary, CreatorGrowth, CreatorAccountGrowth, VideoGrowth, QuerySummary, QueryDetail, VideoDetail, PaginatedVideos, StatsSummary, TrendPoint, InteractionData, VideoComparison, SettingsResponse, AIConversation, AIConversationDetail } from "@/types";
+import { isStaticMode, readStaticPath } from "@/lib/static-data";
 
 const BASE = import.meta.env.VITE_API_BASE || "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  if (isStaticMode) {
+    const method = options?.method?.toUpperCase() ?? "GET";
+    if (method !== "GET") {
+      throw new Error("This static deployment is read-only");
+    }
+    return readStaticPath<T>(path);
+  }
   const resp = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
@@ -10,6 +18,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!resp.ok) throw new Error(`API error: ${resp.status}`);
   return resp.json();
 }
+
+export { isStaticMode };
 
 export const api = {
   fetch: (uid: number, start_date: string, end_date: string) =>

@@ -19,6 +19,17 @@ revival that rewrote most of the surface. For anything before that, read
 
 ## 2026-11-08
 
+### Added
+
+- **A sanitized dashboard snapshot can now be published as a read-only GitHub
+  Pages site.** `./bilia export-static` reads the local SQLite library through
+  the API's own response functions and writes only creator, video, chart and
+  comparison data. The static build hides mutation controls, implements
+  catalogue search, sorting and pagination in the browser, and uses a Pages
+  workflow with asset and SPA fallback paths derived from the repository name.
+  Settings, credentials, AI conversations and the database itself are excluded
+  from the public artifact.
+
 ### Changed
 
 - **Video radar comparisons now use a local cohort and percentile ranks

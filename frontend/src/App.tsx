@@ -3,6 +3,7 @@ import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import VideoDetailPage from "./pages/VideoDetail";
 import Settings from "./pages/Settings";
+import { isStaticMode } from "./lib/api";
 
 /**
  * Each creator and each video gets its own instance. Remounting on the id is
@@ -20,15 +21,21 @@ function KeyedVideoDetail() {
 }
 
 export default function App() {
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<KeyedDashboard />} />
           <Route path="/dashboard/:uid" element={<KeyedDashboard />} />
           <Route path="/video/:bvid" element={<KeyedVideoDetail />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route
+            path="/settings"
+            element={
+              isStaticMode ? <Navigate to="/dashboard" replace /> : <Settings />
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>
