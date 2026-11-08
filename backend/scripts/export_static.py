@@ -12,11 +12,13 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = REPO_ROOT / "backend"
 DEFAULT_DATABASE = REPO_ROOT / "data" / "bilianalyzer.db"
 DEFAULT_OUTPUT = (
     REPO_ROOT / "frontend" / "public" / "static-data" / "snapshot.json"
@@ -32,6 +34,7 @@ def _database_url(database: Path) -> str:
 # resolves settings at import time.
 os.environ.setdefault("DATABASE_URL", _database_url(DEFAULT_DATABASE))
 os.environ.setdefault("DATA_DIR", str(DEFAULT_DATABASE.parent))
+sys.path.insert(0, str(BACKEND_ROOT))
 
 from fastapi import HTTPException  # noqa: E402
 from sqlalchemy import event  # noqa: E402
